@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"go-oauth-rbac-service/internal/config"
 
@@ -13,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/exemplar"
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
@@ -21,6 +23,7 @@ type AppMetrics struct {
 	authRefreshCounter metric.Int64Counter
 	authLogoutCounter  metric.Int64Counter
 	adminRoleCounter   metric.Int64Counter
+	authReqDuration    metric.Float64Histogram
 }
 
 var (
@@ -59,6 +62,15 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 	mp := sdkmetric.NewMeterProvider(
 		sdkmetric.WithResource(res),
 		sdkmetric.WithReader(reader),
+		sdkmetric.WithExemplarFilter(exemplar.TraceBasedFilter),
+		sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Name: "auth.request.duration"},
+			sdkmetric.Stream{
+				Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+					Boundaries: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
+				},
+			},
+		)),
 	)
 	otel.SetMeterProvider(mp)
 
@@ -79,6 +91,10 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 	if err != nil {
 		return nil, err
 	}
+	authReqDuration, err := meter.Float64Histogram("auth.request.duration", metric.WithUnit("s"), metric.WithDescription("Duration of auth endpoint requests in seconds"))
+	if err != nil {
+		return nil, err
+	}
 
 	metricsMu.Lock()
 	appMetrics = &AppMetrics{
@@ -86,6 +102,7 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 		authRefreshCounter: refreshCounter,
 		authLogoutCounter:  logoutCounter,
 		adminRoleCounter:   adminRoleCounter,
+		authReqDuration:    authReqDuration,
 	}
 	metricsMu.Unlock()
 
@@ -136,4 +153,21 @@ func RecordAdminRoleMutation(ctx context.Context, action string) {
 		return
 	}
 	m.adminRoleCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("action", action)))
+}
+
+func RecordAuthRequestDuration(ctx context.Context, endpoint, status string, duration time.Duration) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.authReqDuration.Record(
+		ctx,
+		duration.Seconds(),
+		metric.WithAttributes(
+			attribute.String("endpoint", endpoint),
+			attribute.String("status", status),
+		),
+	)
 }

@@ -43,6 +43,7 @@ REST API service in Go with Google OAuth login, JWT auth, secure cookie sessions
 - `task wire-check`
 - `task test`
 - `task lint`
+- `task obs-validate` (generates traffic and verifies metric exemplar -> Tempo trace -> Loki log correlation)
 
 ## Docker
 - `task docker-up`
@@ -58,3 +59,4 @@ REST API service in Go with Google OAuth login, JWT auth, secure cookie sessions
 - Mutating cookie-auth endpoints require `X-CSRF-Token` matching `csrf_token` cookie.
 - First admin can be bootstrapped with `BOOTSTRAP_ADMIN_EMAIL`.
 - OTel metrics, tracing, and logs are powered by the OpenTelemetry Go SDK and exported through the collector.
+- Mimir exemplar ingestion is explicitly enabled via `limits.max_global_exemplars_per_user`.
