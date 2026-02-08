@@ -11,7 +11,6 @@ import (
 	"go-oauth-rbac-service/internal/config"
 	"go-oauth-rbac-service/internal/http/handler"
 	"go-oauth-rbac-service/internal/http/router"
-	"go-oauth-rbac-service/internal/observability"
 	"go-oauth-rbac-service/internal/repository"
 	"go-oauth-rbac-service/internal/service"
 )
@@ -23,7 +22,11 @@ func InitializeApp() (*app.App, error) {
 	if err != nil {
 		return nil, err
 	}
-	logger := observability.NewLogger()
+	runtime, err := provideObservabilityRuntime(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	logger := provideAppLogger(configConfig, runtime)
 	googleOAuthProvider := service.NewGoogleOAuthProvider(configConfig)
 	db, err := provideRuntimeDB(configConfig)
 	if err != nil {
@@ -47,10 +50,6 @@ func InitializeApp() (*app.App, error) {
 	dependencies := provideRouterDependencies(authHandler, userHandler, adminHandler, jwtManager, rbacService, configConfig)
 	httpHandler := router.NewRouter(dependencies)
 	server := provideHTTPServer(configConfig, httpHandler)
-	runtime, err := provideObservabilityRuntime(configConfig, logger)
-	if err != nil {
-		return nil, err
-	}
 	appApp := provideApp(configConfig, logger, server, runtime)
 	return appApp, nil
 }

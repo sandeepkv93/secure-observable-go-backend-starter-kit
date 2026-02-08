@@ -24,8 +24,8 @@ import (
 var ConfigSet = wire.NewSet(config.Load)
 
 var ObservabilitySet = wire.NewSet(
-	observability.NewLogger,
 	provideObservabilityRuntime,
+	provideAppLogger,
 )
 
 var RuntimeInfraSet = wire.NewSet(
@@ -89,8 +89,13 @@ func (m *MigrationRunner) Run() error {
 	return nil
 }
 
-func provideObservabilityRuntime(cfg *config.Config, logger *slog.Logger) (*observability.Runtime, error) {
-	return observability.InitRuntime(context.Background(), cfg, logger)
+func provideObservabilityRuntime(cfg *config.Config) (*observability.Runtime, error) {
+	bootstrapLogger := observability.NewBootstrapLogger(cfg)
+	return observability.InitRuntime(context.Background(), cfg, bootstrapLogger)
+}
+
+func provideAppLogger(cfg *config.Config, runtime *observability.Runtime) *slog.Logger {
+	return observability.InitLogger(cfg, runtime.LoggerProvider)
 }
 
 func provideOpenDB(cfg *config.Config) (*gorm.DB, error) {

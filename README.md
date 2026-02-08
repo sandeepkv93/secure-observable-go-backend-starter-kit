@@ -54,4 +54,4 @@ REST API service in Go with Google OAuth login, JWT auth, secure cookie sessions
 - Auth and API routes use fixed-window IP rate limiting (configurable via env).
 - Mutating cookie-auth endpoints require `X-CSRF-Token` matching `csrf_token` cookie.
 - First admin can be bootstrapped with `BOOTSTRAP_ADMIN_EMAIL`.
-- OTel metrics and tracing are both powered by the OpenTelemetry Go SDK and exported through the collector.
+- OTel metrics, tracing, and logs are powered by the OpenTelemetry Go SDK and exported through the collector.

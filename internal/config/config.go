@@ -43,6 +43,8 @@ type Config struct {
 	OTELTraceSamplingRatio    float64
 	OTELMetricsEnabled        bool
 	OTELTracingEnabled        bool
+	OTELLogsEnabled           bool
+	OTELLogLevel              string
 }
 
 func Load() (*Config, error) {
@@ -74,6 +76,8 @@ func Load() (*Config, error) {
 		OTELTraceSamplingRatio:   getEnvFloat("OTEL_TRACE_SAMPLING_RATIO", 1.0),
 		OTELMetricsEnabled:       getEnvBool("OTEL_METRICS_ENABLED", true),
 		OTELTracingEnabled:       getEnvBool("OTEL_TRACING_ENABLED", true),
+		OTELLogsEnabled:          getEnvBool("OTEL_LOGS_ENABLED", true),
+		OTELLogLevel:             strings.ToLower(getEnv("OTEL_LOG_LEVEL", "info")),
 	}
 
 	accessTTL, err := time.ParseDuration(getEnv("JWT_ACCESS_TTL", "15m"))
@@ -138,7 +142,7 @@ func (c *Config) Validate() error {
 	if c.APIRateLimitPerMin <= 0 {
 		errs = append(errs, "API_RATE_LIMIT_PER_MIN must be > 0")
 	}
-	if (c.OTELMetricsEnabled || c.OTELTracingEnabled) && c.OTELExporterOTLPEndpoint == "" {
+	if (c.OTELMetricsEnabled || c.OTELTracingEnabled || c.OTELLogsEnabled) && c.OTELExporterOTLPEndpoint == "" {
 		errs = append(errs, "OTEL_EXPORTER_OTLP_ENDPOINT is required when OTel is enabled")
 	}
 	if c.OTELTraceSamplingRatio < 0 || c.OTELTraceSamplingRatio > 1 {
@@ -147,10 +151,22 @@ func (c *Config) Validate() error {
 	if c.OTELMetricsExportInterval <= 0 {
 		errs = append(errs, "OTEL_METRICS_EXPORT_INTERVAL must be > 0")
 	}
+	if !isValidLogLevel(c.OTELLogLevel) {
+		errs = append(errs, "OTEL_LOG_LEVEL must be one of debug, info, warn, error")
+	}
 	if len(errs) > 0 {
 		return errors.New(strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+func isValidLogLevel(v string) bool {
+	switch strings.ToLower(v) {
+	case "debug", "info", "warn", "error":
+		return true
+	default:
+		return false
+	}
 }
 
 func getEnv(key, def string) string {
