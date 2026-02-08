@@ -26,6 +26,12 @@ tasks:
     cmds:
       - go vet ./...
 
+  ci:
+    cmds:
+      - task wire-check
+      - task lint
+      - task test
+
   docker-up:
     cmds:
       - docker compose up --build -d

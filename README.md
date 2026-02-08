@@ -25,6 +25,7 @@ REST API service in Go with Google OAuth login, JWT auth, secure cookie sessions
 - `task run`
 
 ## Test and Checks
+- `task ci` (recommended full local gate)
 - `task wire-check`
 - `task test`
 - `task lint`

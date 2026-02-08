@@ -1,6 +1,8 @@
 package di
 
 import (
+	"log/slog"
+	"net/http"
 	"testing"
 
 	"go-oauth-rbac-service/internal/config"
@@ -28,4 +30,29 @@ func TestProvideRouterDependencies(t *testing.T) {
 		t.Fatalf("unexpected cors origins: %+v", dep.CORSOrigins)
 	}
 	_ = router.Dependencies(dep)
+}
+
+func TestProvideApp(t *testing.T) {
+	cfg := &config.Config{HTTPPort: "8080"}
+	logger := slog.Default()
+	srv := &http.Server{Addr: ":8080"}
+	ready := &observabilityReady{}
+
+	app := provideApp(cfg, logger, srv, ready)
+	if app == nil {
+		t.Fatal("expected app")
+	}
+	if app.Config != cfg || app.Logger != logger || app.Server != srv {
+		t.Fatal("app dependencies not wired as expected")
+	}
+}
+
+func TestInitializeObservability(t *testing.T) {
+	ready, err := initializeObservability()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ready == nil {
+		t.Fatal("expected observabilityReady")
+	}
 }
