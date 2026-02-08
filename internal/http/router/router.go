@@ -32,7 +32,7 @@ func NewRouter(dep Dependencies) http.Handler {
 	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(middleware.RequestID)
-	r.Use(chimiddleware.Logger)
+	r.Use(middleware.StructuredRequestLogger)
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.CORS(dep.CORSOrigins))
 	r.Use(middleware.BodyLimit(1 << 20))
