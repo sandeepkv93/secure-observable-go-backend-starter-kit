@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
@@ -85,6 +86,7 @@ type authTestServerOptions struct {
 	cfgOverride    func(cfg *config.Config)
 	verifyNotifier service.EmailVerificationNotifier
 	resetNotifier  service.PasswordResetNotifier
+	adminListCache service.AdminListCacheStore
 }
 
 func TestAuthLifecycleLoginRefreshLogoutRevoked(t *testing.T) {
@@ -247,7 +249,8 @@ func newAuthTestServer(t *testing.T) (string, *http.Client, func()) {
 func newAuthTestServerWithOptions(t *testing.T, opts authTestServerOptions) (string, *http.Client, func()) {
 	t.Helper()
 
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
@@ -315,7 +318,12 @@ func newAuthTestServerWithOptions(t *testing.T, opts authTestServerOptions) (str
 
 	authHandler := handler.NewAuthHandler(authSvc, cookieMgr, "0123456789abcdef0123456789abcdef", cfg.JWTRefreshTTL)
 	userHandler := handler.NewUserHandler(userSvc, sessionSvc)
-	adminHandler := handler.NewAdminHandler(userSvc, userRepo, roleRepo, permRepo, rbac, db, cfg)
+	var adminHandler *handler.AdminHandler
+	if opts.adminListCache != nil {
+		adminHandler = handler.NewAdminHandler(userSvc, userRepo, roleRepo, permRepo, rbac, opts.adminListCache, db, cfg)
+	} else {
+		adminHandler = handler.NewAdminHandler(userSvc, userRepo, roleRepo, permRepo, rbac, service.NewNoopAdminListCacheStore(), db, cfg)
+	}
 	var idempotencyFactory router.IdempotencyMiddlewareFactory
 	if cfg.IdempotencyEnabled {
 		store := service.NewDBIdempotencyStore(db)

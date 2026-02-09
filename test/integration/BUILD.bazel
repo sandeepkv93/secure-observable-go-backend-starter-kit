@@ -3,6 +3,7 @@ load("@rules_go//go:def.bzl", "go_test")
 go_test(
     name = "integration_test",
     srcs = [
+        "admin_list_cache_test.go",
         "admin_list_pagination_test.go",
         "admin_rbac_write_test.go",
         "audit_taxonomy_test.go",

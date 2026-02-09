@@ -51,3 +51,22 @@ func TestProvideApp(t *testing.T) {
 		t.Fatal("app dependencies not wired as expected")
 	}
 }
+
+func TestProvideRedisClientEnabledForAdminListCache(t *testing.T) {
+	cfg := &config.Config{
+		AdminListCacheEnabled: false,
+		RateLimitRedisEnabled: false,
+		IdempotencyEnabled:    false,
+	}
+	client := provideRedisClient(cfg)
+	if client != nil {
+		t.Fatal("expected nil redis client when all redis-backed features are disabled")
+	}
+
+	cfg.AdminListCacheEnabled = true
+	cfg.RedisAddr = "localhost:6379"
+	client = provideRedisClient(cfg)
+	if client == nil {
+		t.Fatal("expected redis client when admin list cache is enabled")
+	}
+}

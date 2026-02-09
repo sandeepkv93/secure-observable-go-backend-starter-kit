@@ -303,8 +303,11 @@ Configuration is loaded and validated in `internal/config/config.go`.
 - `IDEMPOTENCY_ENABLED` (default `true`)
 - `IDEMPOTENCY_REDIS_ENABLED` (default `true`, falls back to DB store when disabled)
 - `IDEMPOTENCY_TTL` (default `24h`)
+- `ADMIN_LIST_CACHE_ENABLED` (default `true`)
+- `ADMIN_LIST_CACHE_TTL` (default `30s`)
 - `REDIS_ADDR`, `REDIS_PASSWORD`, `REDIS_DB`, `RATE_LIMIT_REDIS_PREFIX`
 - `IDEMPOTENCY_REDIS_PREFIX` (default `idem`)
+- `ADMIN_LIST_CACHE_REDIS_PREFIX` (default `admin_list_cache`)
 - `READINESS_PROBE_TIMEOUT` (default `1s`)
 - `SERVER_START_GRACE_PERIOD` (default `2s`)
 - `SHUTDOWN_TIMEOUT` (default `20s`)
@@ -405,6 +408,22 @@ OpenAPI spec:
 - RBAC is permission-based and enforced in route middleware.
 - Auth and API endpoints use separate fixed-window rate limiters.
 - Scoped mutating endpoints enforce idempotency keys with replay/conflict semantics (`Idempotency-Key`).
+- Admin list endpoints (`/admin/users`, `/admin/roles`, `/admin/permissions`) use read-through Redis cache with actor-scoped query keys and short TTL.
+- RBAC/admin mutations invalidate affected admin list cache namespaces to prevent stale list responses.
+
+## Admin List Cache Policy
+
+- Key shape: `namespace + actor_user_id + normalized_query_params`
+- Default TTL: `30s` (`ADMIN_LIST_CACHE_TTL`)
+- Namespaces:
+  - `admin.users.list`
+  - `admin.roles.list`
+  - `admin.permissions.list`
+- Invalidation matrix:
+  - `PATCH /admin/users/{id}/roles` -> `admin.users.list`
+  - `POST/PATCH/DELETE /admin/roles/{id?}` -> `admin.roles.list`, `admin.users.list`
+  - `POST/PATCH/DELETE /admin/permissions/{id?}` -> `admin.permissions.list`, `admin.roles.list`
+  - `POST /admin/rbac/sync` -> all three namespaces
 
 ## Audit Taxonomy
 

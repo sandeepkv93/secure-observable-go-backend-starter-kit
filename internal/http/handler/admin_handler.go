@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
@@ -30,6 +32,8 @@ type AdminHandler struct {
 	roleRepo             repository.RoleRepository
 	permRepo             repository.PermissionRepository
 	rbac                 service.RBACAuthorizer
+	adminListCache       service.AdminListCacheStore
+	adminListCacheTTL    time.Duration
 	db                   *gorm.DB
 	cfg                  *config.Config
 	protectedRoles       map[string]struct{}
@@ -42,6 +46,7 @@ func NewAdminHandler(
 	roleRepo repository.RoleRepository,
 	permRepo repository.PermissionRepository,
 	rbac service.RBACAuthorizer,
+	adminListCache service.AdminListCacheStore,
 	db *gorm.DB,
 	cfg *config.Config,
 ) *AdminHandler {
@@ -65,6 +70,8 @@ func NewAdminHandler(
 		roleRepo:             roleRepo,
 		permRepo:             permRepo,
 		rbac:                 rbac,
+		adminListCache:       adminListCache,
+		adminListCacheTTL:    cfg.AdminListCacheTTL,
 		db:                   db,
 		cfg:                  cfg,
 		protectedRoles:       protectedRoles,
@@ -73,6 +80,13 @@ func NewAdminHandler(
 }
 
 func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	cacheNamespace := "admin.users.list"
+	cacheKey := h.adminListCacheKey(r, cacheNamespace)
+	if cachedData, ok := h.readAdminListCache(r, cacheNamespace, cacheKey); ok {
+		response.JSON(w, r, http.StatusOK, cachedData)
+		return
+	}
+
 	pageReq, err := parsePageRequest(r)
 	if err != nil {
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
@@ -104,10 +118,13 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		Role:        filterRole,
 	})
 	if err != nil {
+		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "error")
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list users", nil)
 		return
 	}
-	response.JSON(w, r, http.StatusOK, paginatedData(usersPage.Items, usersPage.Page, usersPage.PageSize, usersPage.Total, usersPage.TotalPages))
+	payload := paginatedData(usersPage.Items, usersPage.Page, usersPage.PageSize, usersPage.Total, usersPage.TotalPages)
+	h.writeAdminListCache(r, cacheNamespace, cacheKey, payload)
+	response.JSON(w, r, http.StatusOK, payload)
 }
 
 func (h *AdminHandler) SetUserRoles(w http.ResponseWriter, r *http.Request) {
@@ -139,10 +156,18 @@ func (h *AdminHandler) SetUserRoles(w http.ResponseWriter, r *http.Request) {
 		Reason:      "roles_updated",
 	}, "role_ids", body.RoleIDs)
 	observability.RecordAdminRBACMutation(r.Context(), "user_role", "set_user_roles", "success")
+	h.invalidateAdminListCaches(r, "admin.users.list")
 	response.JSON(w, r, http.StatusOK, map[string]any{"user_id": userID, "role_ids": body.RoleIDs})
 }
 
 func (h *AdminHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
+	cacheNamespace := "admin.roles.list"
+	cacheKey := h.adminListCacheKey(r, cacheNamespace)
+	if cachedData, ok := h.readAdminListCache(r, cacheNamespace, cacheKey); ok {
+		response.JSON(w, r, http.StatusOK, cachedData)
+		return
+	}
+
 	pageReq, err := parsePageRequest(r)
 	if err != nil {
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
@@ -161,10 +186,13 @@ func (h *AdminHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	filterName := strings.TrimSpace(r.URL.Query().Get("name"))
 	rolesPage, err := h.roleRepo.ListPaged(pageReq, sortBy, sortOrder, filterName)
 	if err != nil {
+		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "error")
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list roles", nil)
 		return
 	}
-	response.JSON(w, r, http.StatusOK, paginatedData(rolesPage.Items, rolesPage.Page, rolesPage.PageSize, rolesPage.Total, rolesPage.TotalPages))
+	payload := paginatedData(rolesPage.Items, rolesPage.Page, rolesPage.PageSize, rolesPage.Total, rolesPage.TotalPages)
+	h.writeAdminListCache(r, cacheNamespace, cacheKey, payload)
+	response.JSON(w, r, http.StatusOK, payload)
 }
 
 func (h *AdminHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
@@ -217,6 +245,7 @@ func (h *AdminHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
 		Reason:      "role_created",
 	}, "role_name", role.Name, "after_permissions", body.Permissions)
 	observability.RecordAdminRBACMutation(r.Context(), "role", "create", "success")
+	h.invalidateAdminListCaches(r, "admin.roles.list", "admin.users.list")
 	response.JSON(w, r, http.StatusCreated, role)
 }
 
@@ -325,6 +354,7 @@ func (h *AdminHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		"after_permissions", permissionsToStrings(updated.Permissions),
 	)
 	observability.RecordAdminRBACMutation(r.Context(), "role", "update", "success")
+	h.invalidateAdminListCaches(r, "admin.roles.list", "admin.users.list")
 	response.JSON(w, r, http.StatusOK, updated)
 }
 
@@ -378,10 +408,18 @@ func (h *AdminHandler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 		Reason:      "role_deleted",
 	}, "role_name", role.Name)
 	observability.RecordAdminRBACMutation(r.Context(), "role", "delete", "success")
+	h.invalidateAdminListCaches(r, "admin.roles.list", "admin.users.list")
 	response.JSON(w, r, http.StatusOK, map[string]any{"role_id": roleID, "status": "deleted"})
 }
 
 func (h *AdminHandler) ListPermissions(w http.ResponseWriter, r *http.Request) {
+	cacheNamespace := "admin.permissions.list"
+	cacheKey := h.adminListCacheKey(r, cacheNamespace)
+	if cachedData, ok := h.readAdminListCache(r, cacheNamespace, cacheKey); ok {
+		response.JSON(w, r, http.StatusOK, cachedData)
+		return
+	}
+
 	pageReq, err := parsePageRequest(r)
 	if err != nil {
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
@@ -402,10 +440,13 @@ func (h *AdminHandler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 	filterAction := strings.TrimSpace(r.URL.Query().Get("action"))
 	permsPage, err := h.permRepo.ListPaged(pageReq, sortBy, sortOrder, filterResource, filterAction)
 	if err != nil {
+		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "error")
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list permissions", nil)
 		return
 	}
-	response.JSON(w, r, http.StatusOK, paginatedData(permsPage.Items, permsPage.Page, permsPage.PageSize, permsPage.Total, permsPage.TotalPages))
+	payload := paginatedData(permsPage.Items, permsPage.Page, permsPage.PageSize, permsPage.Total, permsPage.TotalPages)
+	h.writeAdminListCache(r, cacheNamespace, cacheKey, payload)
+	response.JSON(w, r, http.StatusOK, payload)
 }
 
 func (h *AdminHandler) CreatePermission(w http.ResponseWriter, r *http.Request) {
@@ -443,6 +484,7 @@ func (h *AdminHandler) CreatePermission(w http.ResponseWriter, r *http.Request) 
 		Reason:      "permission_created",
 	}, "permission", resource+":"+action)
 	observability.RecordAdminRBACMutation(r.Context(), "permission", "create", "success")
+	h.invalidateAdminListCaches(r, "admin.permissions.list", "admin.roles.list")
 	response.JSON(w, r, http.StatusCreated, permission)
 }
 
@@ -519,6 +561,7 @@ func (h *AdminHandler) UpdatePermission(w http.ResponseWriter, r *http.Request) 
 		Reason:      "permission_updated",
 	}, "before", before.Resource+":"+before.Action, "after", updated.Resource+":"+updated.Action)
 	observability.RecordAdminRBACMutation(r.Context(), "permission", "update", "success")
+	h.invalidateAdminListCaches(r, "admin.permissions.list", "admin.roles.list")
 	response.JSON(w, r, http.StatusOK, updated)
 }
 
@@ -574,6 +617,7 @@ func (h *AdminHandler) DeletePermission(w http.ResponseWriter, r *http.Request) 
 		Reason:      "permission_deleted",
 	}, "permission", permToken)
 	observability.RecordAdminRBACMutation(r.Context(), "permission", "delete", "success")
+	h.invalidateAdminListCaches(r, "admin.permissions.list", "admin.roles.list")
 	response.JSON(w, r, http.StatusOK, map[string]any{"permission_id": permID, "status": "deleted"})
 }
 
@@ -595,6 +639,7 @@ func (h *AdminHandler) SyncRBAC(w http.ResponseWriter, r *http.Request) {
 		Reason:      "seed_reconciled",
 	}, "report", report)
 	observability.RecordAdminRBACMutation(r.Context(), "sync", "sync", "success")
+	h.invalidateAdminListCaches(r, "admin.users.list", "admin.roles.list", "admin.permissions.list")
 	response.JSON(w, r, http.StatusOK, report)
 }
 
@@ -840,4 +885,71 @@ func paginatedData[T any](items []T, page, pageSize int, total int64, totalPages
 			"total_pages": totalPages,
 		},
 	}
+}
+
+func (h *AdminHandler) adminListCacheKey(r *http.Request, namespace string) string {
+	actor := adminActorID(r)
+	query := normalizeQueryValues(r.URL.Query())
+	return namespace + "|actor=" + actor + "|query=" + query
+}
+
+func (h *AdminHandler) readAdminListCache(r *http.Request, namespace, key string) (json.RawMessage, bool) {
+	if h.adminListCache == nil || h.adminListCacheTTL <= 0 {
+		return nil, false
+	}
+	cached, ok, err := h.adminListCache.Get(r.Context(), namespace, key)
+	if err != nil {
+		observability.RecordAdminListCacheEvent(r.Context(), namespace, "store_error")
+		return nil, false
+	}
+	if !ok {
+		observability.RecordAdminListCacheEvent(r.Context(), namespace, "miss")
+		return nil, false
+	}
+	observability.RecordAdminListCacheEvent(r.Context(), namespace, "hit")
+	return json.RawMessage(cached), true
+}
+
+func (h *AdminHandler) writeAdminListCache(r *http.Request, namespace, key string, payload any) {
+	if h.adminListCache == nil || h.adminListCacheTTL <= 0 {
+		return
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		observability.RecordAdminListCacheEvent(r.Context(), namespace, "encode_error")
+		return
+	}
+	if err := h.adminListCache.Set(r.Context(), namespace, key, encoded, h.adminListCacheTTL); err != nil {
+		observability.RecordAdminListCacheEvent(r.Context(), namespace, "store_error")
+		return
+	}
+	observability.RecordAdminListCacheEvent(r.Context(), namespace, "store")
+}
+
+func (h *AdminHandler) invalidateAdminListCaches(r *http.Request, namespaces ...string) {
+	if h.adminListCache == nil || len(namespaces) == 0 {
+		return
+	}
+	for _, namespace := range namespaces {
+		if namespace == "" {
+			continue
+		}
+		if err := h.adminListCache.InvalidateNamespace(r.Context(), namespace); err != nil {
+			observability.RecordAdminListCacheEvent(r.Context(), namespace, "invalidate_error")
+			continue
+		}
+		observability.RecordAdminListCacheEvent(r.Context(), namespace, "invalidate")
+	}
+}
+
+func normalizeQueryValues(values url.Values) string {
+	if len(values) == 0 {
+		return ""
+	}
+	clone := make(url.Values, len(values))
+	for k, v := range values {
+		c := append([]string(nil), v...)
+		clone[k] = c
+	}
+	return clone.Encode()
 }

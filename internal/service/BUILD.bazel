@@ -3,6 +3,8 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "service",
     srcs = [
+        "admin_list_cache.go",
+        "admin_list_cache_redis.go",
         "auth_service.go",
         "email_verification_notifier.go",
         "idempotency_store.go",
@@ -33,6 +35,7 @@ go_library(
 go_test(
     name = "service_test",
     srcs = [
+        "admin_list_cache_test.go",
         "auth_password_policy_test.go",
         "rbac_service_test.go",
         "token_service_test.go",

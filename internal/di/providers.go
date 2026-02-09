@@ -73,6 +73,7 @@ var ServiceSet = wire.NewSet(
 var HTTPSet = wire.NewSet(
 	provideAuthHandler,
 	handler.NewUserHandler,
+	provideAdminListCacheStore,
 	handler.NewAdminHandler,
 	provideGlobalRateLimiter,
 	provideAuthRateLimiter,
@@ -133,7 +134,7 @@ func provideRuntimeDB(cfg *config.Config) (*gorm.DB, error) {
 }
 
 func provideRedisClient(cfg *config.Config) redis.UniversalClient {
-	if !cfg.RateLimitRedisEnabled && (!cfg.IdempotencyEnabled || !cfg.IdempotencyRedisEnabled) {
+	if !cfg.RateLimitRedisEnabled && (!cfg.IdempotencyEnabled || !cfg.IdempotencyRedisEnabled) && !cfg.AdminListCacheEnabled {
 		return nil
 	}
 	return redis.NewClient(&redis.Options{
@@ -141,6 +142,16 @@ func provideRedisClient(cfg *config.Config) redis.UniversalClient {
 		Password: cfg.RedisPassword,
 		DB:       cfg.RedisDB,
 	})
+}
+
+func provideAdminListCacheStore(cfg *config.Config, redisClient redis.UniversalClient) service.AdminListCacheStore {
+	if !cfg.AdminListCacheEnabled {
+		return service.NewNoopAdminListCacheStore()
+	}
+	if redisClient == nil {
+		return service.NewNoopAdminListCacheStore()
+	}
+	return service.NewRedisAdminListCacheStore(redisClient, cfg.AdminListCacheRedisPrefix)
 }
 
 func provideIdempotencyStore(cfg *config.Config, db *gorm.DB, redisClient redis.UniversalClient) service.IdempotencyStore {
