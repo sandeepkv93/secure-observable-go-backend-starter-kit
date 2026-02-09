@@ -34,7 +34,7 @@ tasks:
       - task gazelle
       - |
         bash -ec '
-          files="$(rg --files -g "**/BUILD.bazel")"
+          files="$(find . -name BUILD.bazel -type f | tr "\n" " ")"
           if [ -n "$files" ]; then
             # shellcheck disable=SC2086
             git diff --exit-code -- $files
