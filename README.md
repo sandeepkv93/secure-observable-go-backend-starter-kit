@@ -214,6 +214,7 @@ Your command surface stays simple, for example:
 - `task test:admin-rbac-write`
 - `task test:admin-list`
 - `task test:admin-list-cache`
+- `task test:admin-list-singleflight`
 - `task test:admin-list-etag`
 - `task test:rbac-permission-cache`
 - `task test:problem-details`
@@ -252,6 +253,10 @@ Run only admin list pagination/filter/sort tests:
 Run only admin list conditional ETag tests:
 
 - `task test:admin-list-etag`
+
+Run only admin list singleflight dedupe tests:
+
+- `task test:admin-list-singleflight`
 
 Run only RBAC permission cache tests:
 
@@ -426,6 +431,7 @@ OpenAPI spec:
 - Admin list endpoints (`/admin/users`, `/admin/roles`, `/admin/permissions`) use read-through Redis cache with actor-scoped query keys and short TTL.
 - RBAC/admin mutations invalidate affected admin list cache namespaces to prevent stale list responses.
 - `GET /api/v1/admin/roles` and `GET /api/v1/admin/permissions` also support conditional HTTP caching with `ETag` and `If-None-Match` (`304 Not Modified` on match).
+- Cache-miss bursts are protected with in-process `singleflight` dedupe for admin list reads and RBAC permission resolution.
 
 ## Admin List Cache Policy
 

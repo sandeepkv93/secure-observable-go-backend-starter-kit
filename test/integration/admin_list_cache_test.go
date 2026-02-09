@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"testing"
@@ -114,6 +115,56 @@ func TestAdminListRolesReadThroughCacheAndInvalidation(t *testing.T) {
 	_, setCalls3, _ := cache.Snapshot()
 	if setCalls3 <= setCalls2 {
 		t.Fatalf("expected cache repopulation after invalidation, before=%d after=%d", setCalls2, setCalls3)
+	}
+}
+
+func TestAdminListRolesSingleflightDedupesConcurrentMisses(t *testing.T) {
+	cache := newTrackingAdminListCacheStore(service.NewInMemoryAdminListCacheStore())
+	baseURL, adminClient, closeFn := newAuthTestServerWithOptions(t, authTestServerOptions{
+		cfgOverride: func(cfg *config.Config) {
+			cfg.BootstrapAdminEmail = "admin-cache-singleflight@example.com"
+			cfg.AdminListCacheTTL = time.Minute
+		},
+		adminListCache: cache,
+	})
+	defer closeFn()
+
+	registerAndLogin(t, adminClient, baseURL, "admin-cache-singleflight@example.com", "Valid#Pass1234")
+
+	resp, env := doJSON(t, adminClient, http.MethodPost, baseURL+"/api/v1/admin/roles", map[string]any{
+		"name":        "cache-sf-role",
+		"description": "cached",
+		"permissions": []string{"users:read"},
+	}, nil)
+	if resp.StatusCode != http.StatusCreated || !env.Success {
+		t.Fatalf("create role failed: status=%d success=%v", resp.StatusCode, env.Success)
+	}
+
+	const workers = 16
+	url := baseURL + "/api/v1/admin/roles?name=cache-sf-role&sort_by=name&sort_order=asc&page=1&page_size=10"
+	var wg sync.WaitGroup
+	errCh := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r, e := doJSON(t, adminClient, http.MethodGet, url, nil, nil)
+			if r.StatusCode != http.StatusOK || !e.Success {
+				errCh <- fmt.Errorf("status=%d success=%v", r.StatusCode, e.Success)
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("concurrent roles list failed: %v", err)
+		}
+	}
+
+	_, setCalls, _ := cache.Snapshot()
+	if setCalls != 1 {
+		t.Fatalf("expected one cache set for concurrent miss burst, got %d", setCalls)
 	}
 }
 

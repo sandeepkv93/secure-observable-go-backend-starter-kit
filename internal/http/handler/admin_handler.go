@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
@@ -36,6 +37,7 @@ type AdminHandler struct {
 	rbac                 service.RBACAuthorizer
 	permissionResolver   service.PermissionResolver
 	adminListCache       service.AdminListCacheStore
+	adminListSingleGroup singleflight.Group
 	adminListCacheTTL    time.Duration
 	db                   *gorm.DB
 	cfg                  *config.Config
@@ -114,21 +116,38 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	filterEmail := strings.TrimSpace(r.URL.Query().Get("email"))
 	filterStatus := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
 	filterRole := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("role")))
-	usersPage, err := h.userRepo.ListPaged(repository.UserListQuery{
-		PageRequest: pageReq,
-		SortBy:      sortBy,
-		SortOrder:   sortOrder,
-		Email:       filterEmail,
-		Status:      filterStatus,
-		Role:        filterRole,
+	sfKey := cacheNamespace + "|" + cacheKey
+	result, err, shared := h.adminListSingleGroup.Do(sfKey, func() (interface{}, error) {
+		usersPage, err := h.userRepo.ListPaged(repository.UserListQuery{
+			PageRequest: pageReq,
+			SortBy:      sortBy,
+			SortOrder:   sortOrder,
+			Email:       filterEmail,
+			Status:      filterStatus,
+			Role:        filterRole,
+		})
+		if err != nil {
+			return nil, err
+		}
+		payload := paginatedData(usersPage.Items, usersPage.Page, usersPage.PageSize, usersPage.Total, usersPage.TotalPages)
+		h.writeAdminListCache(r, cacheNamespace, cacheKey, payload)
+		return payload, nil
 	})
+	if shared {
+		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "singleflight_shared")
+	} else {
+		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "singleflight_leader")
+	}
 	if err != nil {
 		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "error")
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list users", nil)
 		return
 	}
-	payload := paginatedData(usersPage.Items, usersPage.Page, usersPage.PageSize, usersPage.Total, usersPage.TotalPages)
-	h.writeAdminListCache(r, cacheNamespace, cacheKey, payload)
+	payload, ok := result.(map[string]any)
+	if !ok {
+		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to encode response", nil)
+		return
+	}
 	response.JSON(w, r, http.StatusOK, payload)
 }
 
@@ -190,14 +209,31 @@ func (h *AdminHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filterName := strings.TrimSpace(r.URL.Query().Get("name"))
-	rolesPage, err := h.roleRepo.ListPaged(pageReq, sortBy, sortOrder, filterName)
+	sfKey := cacheNamespace + "|" + cacheKey
+	result, err, shared := h.adminListSingleGroup.Do(sfKey, func() (interface{}, error) {
+		rolesPage, err := h.roleRepo.ListPaged(pageReq, sortBy, sortOrder, filterName)
+		if err != nil {
+			return nil, err
+		}
+		payload := paginatedData(rolesPage.Items, rolesPage.Page, rolesPage.PageSize, rolesPage.Total, rolesPage.TotalPages)
+		h.writeAdminListCache(r, cacheNamespace, cacheKey, payload)
+		return payload, nil
+	})
+	if shared {
+		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "singleflight_shared")
+	} else {
+		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "singleflight_leader")
+	}
 	if err != nil {
 		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "error")
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list roles", nil)
 		return
 	}
-	payload := paginatedData(rolesPage.Items, rolesPage.Page, rolesPage.PageSize, rolesPage.Total, rolesPage.TotalPages)
-	h.writeAdminListCache(r, cacheNamespace, cacheKey, payload)
+	payload, ok := result.(map[string]any)
+	if !ok {
+		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to encode response", nil)
+		return
+	}
 	h.respondAdminListWithConditionalETag(w, r, cacheNamespace, payload, nil)
 }
 
@@ -447,14 +483,31 @@ func (h *AdminHandler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 	}
 	filterResource := strings.TrimSpace(r.URL.Query().Get("resource"))
 	filterAction := strings.TrimSpace(r.URL.Query().Get("action"))
-	permsPage, err := h.permRepo.ListPaged(pageReq, sortBy, sortOrder, filterResource, filterAction)
+	sfKey := cacheNamespace + "|" + cacheKey
+	result, err, shared := h.adminListSingleGroup.Do(sfKey, func() (interface{}, error) {
+		permsPage, err := h.permRepo.ListPaged(pageReq, sortBy, sortOrder, filterResource, filterAction)
+		if err != nil {
+			return nil, err
+		}
+		payload := paginatedData(permsPage.Items, permsPage.Page, permsPage.PageSize, permsPage.Total, permsPage.TotalPages)
+		h.writeAdminListCache(r, cacheNamespace, cacheKey, payload)
+		return payload, nil
+	})
+	if shared {
+		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "singleflight_shared")
+	} else {
+		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "singleflight_leader")
+	}
 	if err != nil {
 		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "error")
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list permissions", nil)
 		return
 	}
-	payload := paginatedData(permsPage.Items, permsPage.Page, permsPage.PageSize, permsPage.Total, permsPage.TotalPages)
-	h.writeAdminListCache(r, cacheNamespace, cacheKey, payload)
+	payload, ok := result.(map[string]any)
+	if !ok {
+		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to encode response", nil)
+		return
+	}
 	h.respondAdminListWithConditionalETag(w, r, cacheNamespace, payload, nil)
 }
 

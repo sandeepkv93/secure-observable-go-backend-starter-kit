@@ -25,6 +25,7 @@ go_library(
     deps = [
         "//internal/config",
         "//internal/domain",
+        "//internal/observability",
         "//internal/repository",
         "//internal/security",
         "@com_github_redis_go_redis_v9//:go-redis",
@@ -32,6 +33,7 @@ go_library(
         "@io_gorm_gorm//clause",
         "@org_golang_x_oauth2//:oauth2",
         "@org_golang_x_oauth2//google",
+        "@org_golang_x_sync//singleflight",
     ],
 )
 

@@ -53,6 +53,10 @@ tasks:
     cmds:
       - go test ./test/integration -run TestAdminListRolesReadThroughCacheAndInvalidation -v
 
+  test:admin-list-singleflight:
+    cmds:
+      - go test ./test/integration -run TestAdminListRolesSingleflightDedupesConcurrentMisses -v
+
   test:admin-list-etag:
     cmds:
       - go test ./test/integration -run TestAdminListConditionalETagForRolesAndPermissions -v

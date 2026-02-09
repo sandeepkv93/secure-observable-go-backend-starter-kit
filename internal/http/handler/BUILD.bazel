@@ -21,5 +21,6 @@ go_library(
         "//internal/service",
         "@com_github_go_chi_chi_v5//:chi",
         "@io_gorm_gorm//:gorm",
+        "@org_golang_x_sync//singleflight",
     ],
 )

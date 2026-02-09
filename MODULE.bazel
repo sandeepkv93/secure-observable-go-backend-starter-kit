@@ -37,4 +37,5 @@ use_repo(
     "io_opentelemetry_go_otel_trace",
     "org_golang_x_crypto",
     "org_golang_x_oauth2",
+    "org_golang_x_sync",
 )

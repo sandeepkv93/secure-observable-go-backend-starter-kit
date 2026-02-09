@@ -7,13 +7,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/observability"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/security"
+	"golang.org/x/sync/singleflight"
 )
 
 type CachedPermissionResolver struct {
 	cacheStore RBACPermissionCacheStore
 	userSvc    UserServiceInterface
 	ttl        time.Duration
+	sf         singleflight.Group
 }
 
 func NewCachedPermissionResolver(cacheStore RBACPermissionCacheStore, userSvc UserServiceInterface, ttl time.Duration) *CachedPermissionResolver {
@@ -43,12 +46,34 @@ func (r *CachedPermissionResolver) ResolvePermissions(ctx context.Context, claim
 		}
 	}
 
-	_, perms, err := r.userSvc.GetByID(uint(userID))
+	sfKey := fmt.Sprintf("rbacperm:user:%d:session:%s", userID, sessionTokenID)
+	result, err, shared := r.sf.Do(sfKey, func() (interface{}, error) {
+		if r.cacheStore != nil && r.ttl > 0 {
+			cached, ok, err := r.cacheStore.Get(ctx, uint(userID), sessionTokenID)
+			if err == nil && ok {
+				return cached, nil
+			}
+		}
+		_, perms, err := r.userSvc.GetByID(uint(userID))
+		if err != nil {
+			return nil, err
+		}
+		if r.cacheStore != nil && r.ttl > 0 {
+			_ = r.cacheStore.Set(ctx, uint(userID), sessionTokenID, perms, r.ttl)
+		}
+		return perms, nil
+	})
+	if shared {
+		observability.RecordRBACPermissionCacheEvent(ctx, "singleflight_shared")
+	} else {
+		observability.RecordRBACPermissionCacheEvent(ctx, "singleflight_leader")
+	}
 	if err != nil {
 		return nil, err
 	}
-	if r.cacheStore != nil && r.ttl > 0 {
-		_ = r.cacheStore.Set(ctx, uint(userID), sessionTokenID, perms, r.ttl)
+	perms, ok := result.([]string)
+	if !ok {
+		return nil, fmt.Errorf("invalid permission result type")
 	}
 	return perms, nil
 }

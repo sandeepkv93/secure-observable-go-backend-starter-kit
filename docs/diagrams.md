@@ -253,6 +253,39 @@ sequenceDiagram
 
 Source: `docs/diagrams/admin-list-cache-flow.mmd`
 
+## Admin List Singleflight Dedupe Flow
+
+```mermaid
+sequenceDiagram
+    participant A1 as Admin Client 1
+    participant A2 as Admin Client 2
+    participant API as Admin Handler
+    participant SF as singleflight Group
+    participant C as Admin List Cache
+    participant DB as PostgreSQL
+
+    A1->>API: GET /api/v1/admin/roles?...
+    A2->>API: GET /api/v1/admin/roles?...
+    API->>C: Cache Get(key)
+    C-->>API: miss
+    API->>SF: Do(namespace|cacheKey)
+    API->>SF: Do(namespace|cacheKey)
+
+    alt leader
+        SF->>DB: ListPaged(...)
+        DB-->>SF: payload
+        SF->>C: Cache Set(key,payload,ttl)
+        SF-->>API: payload (leader)
+    else shared waiter
+        SF-->>API: payload (shared)
+    end
+
+    API-->>A1: 200 + payload
+    API-->>A2: 200 + same payload
+```
+
+Source: `docs/diagrams/admin-list-singleflight-flow.mmd`
+
 ## Admin List Conditional ETag Flow
 
 ```mermaid
