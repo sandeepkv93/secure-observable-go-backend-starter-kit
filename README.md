@@ -212,6 +212,7 @@ Your command surface stays simple, for example:
 - `task test:email-verification`
 - `task test:password-reset`
 - `task test:admin-rbac-write`
+- `task test:admin-list`
 - `task security`
 
 ## Auth Lifecycle Integration Tests
@@ -237,6 +238,10 @@ Run only password reset tests:
 Run only RBAC write API tests:
 
 - `task test:admin-rbac-write`
+
+Run only admin list pagination/filter/sort tests:
+
+- `task test:admin-list`
 
 Run all tests:
 
@@ -365,13 +370,13 @@ User:
 
 Admin (auth + permission checks):
 
-- `GET /api/v1/admin/users` (`users:read`)
+- `GET /api/v1/admin/users` (`users:read`, supports `page,page_size,sort_by,sort_order,email,status,role`)
 - `PATCH /api/v1/admin/users/{id}/roles` (`users:write`)
-- `GET /api/v1/admin/roles` (`roles:read`)
+- `GET /api/v1/admin/roles` (`roles:read`, supports `page,page_size,sort_by,sort_order,name`)
 - `POST /api/v1/admin/roles` (`roles:write`)
 - `PATCH /api/v1/admin/roles/{id}` (`roles:write`)
 - `DELETE /api/v1/admin/roles/{id}` (`roles:write`)
-- `GET /api/v1/admin/permissions` (`permissions:read`)
+- `GET /api/v1/admin/permissions` (`permissions:read`, supports `page,page_size,sort_by,sort_order,resource,action`)
 - `POST /api/v1/admin/permissions` (`permissions:write`)
 - `PATCH /api/v1/admin/permissions/{id}` (`permissions:write`)
 - `DELETE /api/v1/admin/permissions/{id}` (`permissions:write`)

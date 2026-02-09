@@ -26,6 +26,7 @@ var permissionPartRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 type AdminHandler struct {
 	userSvc              service.UserServiceInterface
+	userRepo             repository.UserRepository
 	roleRepo             repository.RoleRepository
 	permRepo             repository.PermissionRepository
 	rbac                 service.RBACAuthorizer
@@ -37,6 +38,7 @@ type AdminHandler struct {
 
 func NewAdminHandler(
 	userSvc service.UserServiceInterface,
+	userRepo repository.UserRepository,
 	roleRepo repository.RoleRepository,
 	permRepo repository.PermissionRepository,
 	rbac service.RBACAuthorizer,
@@ -59,6 +61,7 @@ func NewAdminHandler(
 	}
 	return &AdminHandler{
 		userSvc:              userSvc,
+		userRepo:             userRepo,
 		roleRepo:             roleRepo,
 		permRepo:             permRepo,
 		rbac:                 rbac,
@@ -70,12 +73,41 @@ func NewAdminHandler(
 }
 
 func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.userSvc.List()
+	pageReq, err := parsePageRequest(r)
+	if err != nil {
+		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
+		return
+	}
+	sortBy, sortOrder, err := parseSortParams(r, "created_at", map[string]struct{}{
+		"id":            {},
+		"created_at":    {},
+		"updated_at":    {},
+		"email":         {},
+		"name":          {},
+		"status":        {},
+		"last_login_at": {},
+	})
+	if err != nil {
+		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
+		return
+	}
+
+	filterEmail := strings.TrimSpace(r.URL.Query().Get("email"))
+	filterStatus := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
+	filterRole := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("role")))
+	usersPage, err := h.userRepo.ListPaged(repository.UserListQuery{
+		PageRequest: pageReq,
+		SortBy:      sortBy,
+		SortOrder:   sortOrder,
+		Email:       filterEmail,
+		Status:      filterStatus,
+		Role:        filterRole,
+	})
 	if err != nil {
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list users", nil)
 		return
 	}
-	response.JSON(w, r, http.StatusOK, users)
+	response.JSON(w, r, http.StatusOK, paginatedData(usersPage.Items, usersPage.Page, usersPage.PageSize, usersPage.Total, usersPage.TotalPages))
 }
 
 func (h *AdminHandler) SetUserRoles(w http.ResponseWriter, r *http.Request) {
@@ -103,12 +135,28 @@ func (h *AdminHandler) SetUserRoles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
-	roles, err := h.roleRepo.List()
+	pageReq, err := parsePageRequest(r)
+	if err != nil {
+		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
+		return
+	}
+	sortBy, sortOrder, err := parseSortParams(r, "created_at", map[string]struct{}{
+		"id":         {},
+		"created_at": {},
+		"updated_at": {},
+		"name":       {},
+	})
+	if err != nil {
+		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
+		return
+	}
+	filterName := strings.TrimSpace(r.URL.Query().Get("name"))
+	rolesPage, err := h.roleRepo.ListPaged(pageReq, sortBy, sortOrder, filterName)
 	if err != nil {
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list roles", nil)
 		return
 	}
-	response.JSON(w, r, http.StatusOK, roles)
+	response.JSON(w, r, http.StatusOK, paginatedData(rolesPage.Items, rolesPage.Page, rolesPage.PageSize, rolesPage.Total, rolesPage.TotalPages))
 }
 
 func (h *AdminHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
@@ -303,12 +351,30 @@ func (h *AdminHandler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) ListPermissions(w http.ResponseWriter, r *http.Request) {
-	perms, err := h.permRepo.List()
+	pageReq, err := parsePageRequest(r)
+	if err != nil {
+		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
+		return
+	}
+	sortBy, sortOrder, err := parseSortParams(r, "created_at", map[string]struct{}{
+		"id":         {},
+		"created_at": {},
+		"updated_at": {},
+		"resource":   {},
+		"action":     {},
+	})
+	if err != nil {
+		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
+		return
+	}
+	filterResource := strings.TrimSpace(r.URL.Query().Get("resource"))
+	filterAction := strings.TrimSpace(r.URL.Query().Get("action"))
+	permsPage, err := h.permRepo.ListPaged(pageReq, sortBy, sortOrder, filterResource, filterAction)
 	if err != nil {
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list permissions", nil)
 		return
 	}
-	response.JSON(w, r, http.StatusOK, perms)
+	response.JSON(w, r, http.StatusOK, paginatedData(permsPage.Items, permsPage.Page, permsPage.PageSize, permsPage.Total, permsPage.TotalPages))
 }
 
 func (h *AdminHandler) CreatePermission(w http.ResponseWriter, r *http.Request) {
@@ -649,4 +715,58 @@ func fmtSscanfUint(input string, out *uint) (int, error) {
 func isConflictError(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "duplicate") || strings.Contains(msg, "unique")
+}
+
+func parsePageRequest(r *http.Request) (repository.PageRequest, error) {
+	page := repository.DefaultPage
+	pageSize := repository.DefaultPageSize
+	if raw := strings.TrimSpace(r.URL.Query().Get("page")); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 1 {
+			return repository.PageRequest{}, errors.New("page must be a positive integer")
+		}
+		page = v
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("page_size")); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 1 {
+			return repository.PageRequest{}, errors.New("page_size must be a positive integer")
+		}
+		if v > repository.MaxPageSize {
+			return repository.PageRequest{}, fmt.Errorf("page_size must be <= %d", repository.MaxPageSize)
+		}
+		pageSize = v
+	}
+	return repository.PageRequest{Page: page, PageSize: pageSize}, nil
+}
+
+func parseSortParams(r *http.Request, defaultField string, allowed map[string]struct{}) (string, string, error) {
+	sortBy := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort_by")))
+	if sortBy == "" {
+		sortBy = defaultField
+	}
+	if _, ok := allowed[sortBy]; !ok {
+		return "", "", fmt.Errorf("invalid sort_by: %s", sortBy)
+	}
+
+	sortOrder := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort_order")))
+	if sortOrder == "" {
+		sortOrder = "desc"
+	}
+	if sortOrder != "asc" && sortOrder != "desc" {
+		return "", "", errors.New("sort_order must be asc or desc")
+	}
+	return sortBy, sortOrder, nil
+}
+
+func paginatedData[T any](items []T, page, pageSize int, total int64, totalPages int) map[string]any {
+	return map[string]any{
+		"items": items,
+		"pagination": map[string]any{
+			"page":        page,
+			"page_size":   pageSize,
+			"total":       total,
+			"total_pages": totalPages,
+		},
+	}
 }

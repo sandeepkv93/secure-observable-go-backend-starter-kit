@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "local_credential_repository.go",
         "oauth_repository.go",
+        "pagination.go",
         "permission_repository.go",
         "role_repository.go",
         "session_repository.go",

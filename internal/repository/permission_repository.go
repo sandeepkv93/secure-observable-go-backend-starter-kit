@@ -11,6 +11,7 @@ var ErrPermissionNotFound = errors.New("permission not found")
 
 type PermissionRepository interface {
 	List() ([]domain.Permission, error)
+	ListPaged(req PageRequest, sortBy, sortOrder, resource, action string) (PageResult[domain.Permission], error)
 	FindByID(id uint) (*domain.Permission, error)
 	FindByPairs(pairs [][2]string) ([]domain.Permission, error)
 	FindByResourceAction(resource, action string) (*domain.Permission, error)
@@ -29,6 +30,37 @@ func (r *GormPermissionRepository) List() ([]domain.Permission, error) {
 	var perms []domain.Permission
 	err := r.db.Find(&perms).Error
 	return perms, err
+}
+
+func (r *GormPermissionRepository) ListPaged(req PageRequest, sortBy, sortOrder, resource, action string) (PageResult[domain.Permission], error) {
+	normalized := normalizePageRequest(req)
+	result := PageResult[domain.Permission]{
+		Page:     normalized.Page,
+		PageSize: normalized.PageSize,
+	}
+
+	base := r.db.Model(&domain.Permission{})
+	if resource != "" {
+		base = base.Where("permissions.resource LIKE ?", resource+"%")
+	}
+	if action != "" {
+		base = base.Where("permissions.action LIKE ?", action+"%")
+	}
+	if err := base.Count(&result.Total).Error; err != nil {
+		return PageResult[domain.Permission]{}, err
+	}
+
+	query := base
+	if sortBy != "" {
+		query = query.Order("permissions." + sortBy + " " + sortOrder)
+	}
+	query = query.Order("permissions.id " + sortOrder)
+	offset := (normalized.Page - 1) * normalized.PageSize
+	if err := query.Offset(offset).Limit(normalized.PageSize).Find(&result.Items).Error; err != nil {
+		return PageResult[domain.Permission]{}, err
+	}
+	result.TotalPages = calcTotalPages(result.Total, normalized.PageSize)
+	return result, nil
 }
 
 func (r *GormPermissionRepository) FindByID(id uint) (*domain.Permission, error) {

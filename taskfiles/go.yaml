@@ -45,6 +45,10 @@ tasks:
     cmds:
       - go test ./test/integration -run TestAdminRBAC -v
 
+  test:admin-list:
+    cmds:
+      - go test ./test/integration -run TestAdminList -v
+
   lint:
     deps: [lint:tools]
     cmds:

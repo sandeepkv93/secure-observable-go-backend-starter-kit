@@ -311,7 +311,7 @@ func newAuthTestServerWithOptions(t *testing.T, opts authTestServerOptions) (str
 
 	authHandler := handler.NewAuthHandler(authSvc, cookieMgr, "0123456789abcdef0123456789abcdef", cfg.JWTRefreshTTL)
 	userHandler := handler.NewUserHandler(userSvc, sessionSvc)
-	adminHandler := handler.NewAdminHandler(userSvc, roleRepo, permRepo, rbac, db, cfg)
+	adminHandler := handler.NewAdminHandler(userSvc, userRepo, roleRepo, permRepo, rbac, db, cfg)
 
 	r := router.NewRouter(router.Dependencies{
 		AuthHandler:                authHandler,

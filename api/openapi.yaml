@@ -268,6 +268,65 @@ components:
           pattern: '^[a-zA-Z0-9_\-]+$'
           example: revoke
 
+    PaginationMeta:
+      type: object
+      required: [page, page_size, total, total_pages]
+      properties:
+        page:
+          type: integer
+          format: int32
+          minimum: 1
+          example: 1
+        page_size:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+          example: 20
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+          example: 52
+        total_pages:
+          type: integer
+          format: int32
+          minimum: 0
+          example: 3
+
+    UserListData:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSummary'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    RoleListData:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleSummary'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    PermissionListData:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionSummary'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
     UserListResponse:
       type: object
       required: [success, data, meta]
@@ -276,9 +335,7 @@ components:
           type: boolean
           enum: [true]
         data:
-          type: array
-          items:
-            $ref: '#/components/schemas/UserSummary'
+          $ref: '#/components/schemas/UserListData'
         meta:
           $ref: '#/components/schemas/Meta'
 
@@ -290,9 +347,7 @@ components:
           type: boolean
           enum: [true]
         data:
-          type: array
-          items:
-            $ref: '#/components/schemas/RoleSummary'
+          $ref: '#/components/schemas/RoleListData'
         meta:
           $ref: '#/components/schemas/Meta'
 
@@ -304,9 +359,7 @@ components:
           type: boolean
           enum: [true]
         data:
-          type: array
-          items:
-            $ref: '#/components/schemas/PermissionSummary'
+          $ref: '#/components/schemas/PermissionListData'
         meta:
           $ref: '#/components/schemas/Meta'
 
@@ -907,10 +960,35 @@ paths:
     get:
       tags: [Admin]
       summary: List users
-      description: Returns all users with their assigned roles for RBAC management views.
+      description: Returns paginated users with optional filtering by email/status/role and validated sorting.
       operationId: adminListUsers
       security:
         - accessTokenCookie: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: sort_by
+          schema:
+            type: string
+            enum: [id, created_at, updated_at, email, name, status, last_login_at]
+            default: created_at
+        - in: query
+          name: sort_order
+          schema: { type: string, enum: [asc, desc], default: desc }
+        - in: query
+          name: email
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: role
+          schema: { type: string }
       responses:
         '200':
           description: Users returned
@@ -923,20 +1001,26 @@ paths:
                   value:
                     success: true
                     data:
-                      - id: 42
-                        email: admin@example.com
-                        name: Admin User
-                        avatar_url: https://cdn.example.com/avatars/42.png
-                        status: active
-                        last_login_at: "2026-02-09T09:58:32Z"
-                        created_at: "2026-02-01T00:00:00Z"
-                        updated_at: "2026-02-09T09:58:32Z"
-                        roles:
-                          - id: 1
-                            name: admin
-                            description: Platform administrators
-                            created_at: "2026-02-01T00:00:00Z"
-                            updated_at: "2026-02-01T00:00:00Z"
+                      items:
+                        - id: 42
+                          email: admin@example.com
+                          name: Admin User
+                          avatar_url: https://cdn.example.com/avatars/42.png
+                          status: active
+                          last_login_at: "2026-02-09T09:58:32Z"
+                          created_at: "2026-02-01T00:00:00Z"
+                          updated_at: "2026-02-09T09:58:32Z"
+                          roles:
+                            - id: 1
+                              name: admin
+                              description: Platform administrators
+                              created_at: "2026-02-01T00:00:00Z"
+                              updated_at: "2026-02-01T00:00:00Z"
+                      pagination:
+                        page: 1
+                        page_size: 20
+                        total: 1
+                        total_pages: 1
                     meta:
                       request_id: req-abc123
                       timestamp: "2026-02-09T10:00:00Z"
@@ -1004,10 +1088,29 @@ paths:
     get:
       tags: [Admin]
       summary: List roles
-      description: Returns all RBAC roles with attached permissions for role management UI.
+      description: Returns paginated RBAC roles with optional name filter and validated sorting.
       operationId: adminListRoles
       security:
         - accessTokenCookie: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: sort_by
+          schema:
+            type: string
+            enum: [id, created_at, updated_at, name]
+            default: created_at
+        - in: query
+          name: sort_order
+          schema: { type: string, enum: [asc, desc], default: desc }
+        - in: query
+          name: name
+          schema: { type: string }
       responses:
         '200':
           description: Roles returned
@@ -1020,22 +1123,28 @@ paths:
                   value:
                     success: true
                     data:
-                      - id: 1
-                        name: admin
-                        description: Platform administrators
-                        permissions:
-                          - id: 1
-                            resource: users
-                            action: read
-                            created_at: "2026-02-01T00:00:00Z"
-                            updated_at: "2026-02-01T00:00:00Z"
-                          - id: 2
-                            resource: users
-                            action: write
-                            created_at: "2026-02-01T00:00:00Z"
-                            updated_at: "2026-02-01T00:00:00Z"
-                        created_at: "2026-02-01T00:00:00Z"
-                        updated_at: "2026-02-01T00:00:00Z"
+                      items:
+                        - id: 1
+                          name: admin
+                          description: Platform administrators
+                          permissions:
+                            - id: 1
+                              resource: users
+                              action: read
+                              created_at: "2026-02-01T00:00:00Z"
+                              updated_at: "2026-02-01T00:00:00Z"
+                            - id: 2
+                              resource: users
+                              action: write
+                              created_at: "2026-02-01T00:00:00Z"
+                              updated_at: "2026-02-01T00:00:00Z"
+                          created_at: "2026-02-01T00:00:00Z"
+                          updated_at: "2026-02-01T00:00:00Z"
+                      pagination:
+                        page: 1
+                        page_size: 20
+                        total: 2
+                        total_pages: 1
                     meta:
                       request_id: req-abc123
                       timestamp: "2026-02-09T10:00:00Z"
@@ -1122,10 +1231,32 @@ paths:
     get:
       tags: [Admin]
       summary: List permissions
-      description: Returns canonical permission definitions used while creating/editing roles.
+      description: Returns paginated permission catalog with optional resource/action filters and validated sorting.
       operationId: adminListPermissions
       security:
         - accessTokenCookie: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: sort_by
+          schema:
+            type: string
+            enum: [id, created_at, updated_at, resource, action]
+            default: created_at
+        - in: query
+          name: sort_order
+          schema: { type: string, enum: [asc, desc], default: desc }
+        - in: query
+          name: resource
+          schema: { type: string }
+        - in: query
+          name: action
+          schema: { type: string }
       responses:
         '200':
           description: Permissions returned
@@ -1138,16 +1269,22 @@ paths:
                   value:
                     success: true
                     data:
-                      - id: 1
-                        resource: users
-                        action: read
-                        created_at: "2026-02-01T00:00:00Z"
-                        updated_at: "2026-02-01T00:00:00Z"
-                      - id: 2
-                        resource: users
-                        action: write
-                        created_at: "2026-02-01T00:00:00Z"
-                        updated_at: "2026-02-01T00:00:00Z"
+                      items:
+                        - id: 1
+                          resource: users
+                          action: read
+                          created_at: "2026-02-01T00:00:00Z"
+                          updated_at: "2026-02-01T00:00:00Z"
+                        - id: 2
+                          resource: users
+                          action: write
+                          created_at: "2026-02-01T00:00:00Z"
+                          updated_at: "2026-02-01T00:00:00Z"
+                      pagination:
+                        page: 1
+                        page_size: 20
+                        total: 6
+                        total_pages: 1
                     meta:
                       request_id: req-abc123
                       timestamp: "2026-02-09T10:00:00Z"

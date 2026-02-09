@@ -13,6 +13,7 @@ type RoleRepository interface {
 	FindByID(id uint) (*domain.Role, error)
 	FindByName(name string) (*domain.Role, error)
 	List() ([]domain.Role, error)
+	ListPaged(req PageRequest, sortBy, sortOrder, name string) (PageResult[domain.Role], error)
 	Create(role *domain.Role, permissionIDs []uint) error
 	Update(role *domain.Role, permissionIDs []uint) error
 	DeleteByID(id uint) error
@@ -50,6 +51,34 @@ func (r *GormRoleRepository) List() ([]domain.Role, error) {
 	var roles []domain.Role
 	err := r.db.Preload("Permissions").Find(&roles).Error
 	return roles, err
+}
+
+func (r *GormRoleRepository) ListPaged(req PageRequest, sortBy, sortOrder, name string) (PageResult[domain.Role], error) {
+	normalized := normalizePageRequest(req)
+	result := PageResult[domain.Role]{
+		Page:     normalized.Page,
+		PageSize: normalized.PageSize,
+	}
+
+	base := r.db.Model(&domain.Role{})
+	if name != "" {
+		base = base.Where("roles.name LIKE ?", name+"%")
+	}
+	if err := base.Count(&result.Total).Error; err != nil {
+		return PageResult[domain.Role]{}, err
+	}
+
+	query := base.Preload("Permissions")
+	if sortBy != "" {
+		query = query.Order("roles." + sortBy + " " + sortOrder)
+	}
+	query = query.Order("roles.id " + sortOrder)
+	offset := (normalized.Page - 1) * normalized.PageSize
+	if err := query.Offset(offset).Limit(normalized.PageSize).Find(&result.Items).Error; err != nil {
+		return PageResult[domain.Role]{}, err
+	}
+	result.TotalPages = calcTotalPages(result.Total, normalized.PageSize)
+	return result, nil
 }
 
 func (r *GormRoleRepository) Create(role *domain.Role, permissionIDs []uint) error {

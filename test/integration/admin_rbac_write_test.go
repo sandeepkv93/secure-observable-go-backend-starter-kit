@@ -15,6 +15,10 @@ type roleView struct {
 	Description string `json:"description"`
 }
 
+type roleListPage struct {
+	Items []roleView `json:"items"`
+}
+
 type syncReport struct {
 	CreatedPermissions int  `json:"created_permissions"`
 	CreatedRoles       int  `json:"created_roles"`
@@ -36,12 +40,12 @@ func TestAdminRBACProtectedRoleDeletionRejected(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || !env.Success {
 		t.Fatalf("list roles failed: status=%d success=%v", resp.StatusCode, env.Success)
 	}
-	var roles []roleView
-	if err := json.Unmarshal(env.Data, &roles); err != nil {
+	var roleData roleListPage
+	if err := json.Unmarshal(env.Data, &roleData); err != nil {
 		t.Fatalf("decode roles: %v", err)
 	}
 	var adminRoleID uint
-	for _, role := range roles {
+	for _, role := range roleData.Items {
 		if role.Name == "admin" {
 			adminRoleID = role.ID
 			break
