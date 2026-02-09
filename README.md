@@ -76,7 +76,7 @@ Dependency Injection:
 - Regenerated via `task wire`
 - Checked via `task wire-check`
 
-## Mermaid Diagrams
+## Architecture and Flow Visuals
 
 Additional diagrams are available in `docs/diagrams.md`.
 
@@ -126,10 +126,10 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    API[API + OTel SDK]\nMetrics/Traces/Logs --> COL[OTel Collector]
-    COL --> MIMIR[Mimir\nmetrics + exemplars]
-    COL --> TEMPO[Tempo\ntraces]
-    COL --> LOKI[Loki\nlogs]
+    API[API + OTel SDK<br/>Metrics/Traces/Logs] --> COL[OTel Collector]
+    COL --> MIMIR[Mimir<br/>metrics + exemplars]
+    COL --> TEMPO[Tempo<br/>traces]
+    COL --> LOKI[Loki<br/>logs]
 
     LOADGEN[cmd/loadgen] --> API
     OBSCHECK[cmd/obscheck] --> GRAFANA[Grafana API]
