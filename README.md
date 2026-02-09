@@ -153,12 +153,9 @@ OTel:
 - `OTEL_TRACE_SAMPLING_RATIO`
 - `OTEL_LOG_LEVEL`
 
-## Important Note About `.env.example`
+## `.env.example` Service Naming
 
-`config.Load()` defaults use the current service naming (`secure-observable-go-backend-starter-kit`), but `.env.example` still contains older sample values (`go-oauth-rbac-service`) for `JWT_ISSUER`, `JWT_AUDIENCE`, and `OTEL_SERVICE_NAME`.
-
-For consistency, set these in your `.env` to current names:
-
+`.env.example` is aligned with current defaults and uses:
 - `JWT_ISSUER=secure-observable-go-backend-starter-kit`
 - `JWT_AUDIENCE=secure-observable-go-backend-starter-kit-api`
 - `OTEL_SERVICE_NAME=secure-observable-go-backend-starter-kit`
@@ -214,6 +211,18 @@ Run the API server:
 
 - `go run ./cmd/api`
 
+Example:
+
+```bash
+go run ./cmd/api
+```
+
+Expected output (example):
+
+```text
+{"level":"INFO","msg":"server starting","addr":":8080",...}
+```
+
 ## `cmd/migrate`
 
 - `go run ./cmd/migrate up`
@@ -226,6 +235,24 @@ Key flags:
 - `--timeout` (default `30s`)
 - `--ci`
 
+Examples:
+
+```bash
+go run ./cmd/migrate status --ci
+go run ./cmd/migrate plan --ci
+go run ./cmd/migrate up --ci
+```
+
+Expected output (shape):
+
+```json
+{
+  "ok": true,
+  "title": "migrate status",
+  "details": ["database reachable", "service: secure-observable-go-backend-starter-kit", "migrations: ready"]
+}
+```
+
 ## `cmd/seed`
 
 - `go run ./cmd/seed apply`
@@ -236,6 +263,23 @@ Key flags:
 - `--env-file` (default `.env`)
 - `--bootstrap-admin-email`
 - `--ci`
+
+Examples:
+
+```bash
+go run ./cmd/seed dry-run --ci
+go run ./cmd/seed apply --bootstrap-admin-email=admin@example.com --ci
+```
+
+Expected output (shape):
+
+```json
+{
+  "ok": true,
+  "title": "seed apply",
+  "details": ["seeded default roles and permissions", "bootstrap admin role assignment attempted for: admin@example.com"]
+}
+```
 
 ## `cmd/loadgen`
 
@@ -251,6 +295,22 @@ Key flags:
 - `--seed`
 - `--ci`
 
+Example:
+
+```bash
+go run ./cmd/loadgen run --profile mixed --duration 10s --rps 20 --concurrency 6 --ci
+```
+
+Expected output (shape):
+
+```json
+{
+  "ok": true,
+  "title": "loadgen run",
+  "details": ["total_requests=...", "failures=...", "status_2xx=...", "status_4xx=...", "status_5xx=..."]
+}
+```
+
 ## `cmd/obscheck`
 
 - `go run ./cmd/obscheck run`
@@ -265,6 +325,22 @@ Key flags:
 - `--window`
 - `--base-url`
 - `--ci`
+
+Example:
+
+```bash
+go run ./cmd/obscheck run --ci
+```
+
+Expected output (shape):
+
+```json
+{
+  "ok": true,
+  "title": "obscheck run",
+  "details": ["traffic generated total=... failures=...", "exemplar trace_id=...", "tempo trace lookup: ok", "loki trace correlation: ok"]
+}
+```
 
 ## Task Reference
 
