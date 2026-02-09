@@ -1,113 +1,425 @@
-# secure-observable-go-backend-starter-kit
+# Secure Observable Go Backend Starter Kit
+
 [![CI](https://github.com/sandeepkv93/secure-observable-go-backend-starter-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/sandeepkv93/secure-observable-go-backend-starter-kit/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/badge/Go-1.24.11-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-REST API service in Go with Google OAuth login, JWT auth, secure cookie sessions, RBAC authorization, and OpenTelemetry observability.
+Production-oriented Go backend starter with:
+
+- Google OAuth login
+- Cookie-based JWT session flow (access + refresh)
+- RBAC authorization
+- OpenTelemetry metrics, traces, and logs
+- Local tri-signal stack (Grafana + Tempo + Loki + Mimir + OTel Collector)
+- Bazel + Gazelle + Task + Wire development workflow
+
+## What This Repository Provides
+
+- API server in `cmd/api`
+- Operational CLIs in `cmd/migrate`, `cmd/seed`, `cmd/loadgen`, `cmd/obscheck`
+- Layered internal packages (`internal/*`) with DI composition through Wire
+- Docker compose local stack for DB + observability
+- CI + local hooks enforcing build/test/generation hygiene
+
+## Repository Layout
+
+```text
+.
+├── api/                          # OpenAPI spec
+├── cmd/
+│   ├── api/                      # HTTP server entrypoint
+│   ├── migrate/                  # DB migration CLI
+│   ├── seed/                     # seed/bootstrap CLI
+│   ├── loadgen/                  # traffic generation CLI
+│   └── obscheck/                 # observability validation CLI
+├── configs/                      # collector, Grafana, Loki, Tempo, Mimir configs
+├── internal/
+│   ├── app/                      # app container
+│   ├── config/                   # env config + validation
+│   ├── database/                 # DB open/migrate/seed
+│   ├── di/                       # Wire providers and injectors
+│   ├── domain/                   # entities/models
+│   ├── http/                     # handlers, middleware, router
+│   ├── observability/            # OTel setup and instrumentation helpers
+│   ├── repository/               # data access layer
+│   ├── security/                 # JWT, cookies, hashing, state
+│   ├── service/                  # business logic layer
+│   └── tools/                    # shared CLI tool logic (Cobra + Bubble Tea)
+├── migrations/                   # SQL migrations (bootstrap)
+├── taskfiles/                    # modular Task definitions
+├── test/integration/             # integration tests
+├── docker-compose.yml            # local stack
+├── Taskfile.yaml                 # root task loader
+└── MODULE.bazel / BUILD.bazel    # Bazel and Gazelle config
+```
+
+## Architecture Overview
+
+Request path:
+
+1. Chi router + middleware chain (`internal/http/router`)
+2. Handler layer (`internal/http/handler`)
+3. Service layer (`internal/service`)
+4. Repository layer (`internal/repository`)
+5. GORM + Postgres (`internal/database`)
+
+Cross-cutting:
+
+- Security middleware for headers, CSRF, request ID, rate limiting
+- Structured logging with trace/span correlation fields
+- OTel tracing, metrics (with exemplars), and logs export via collector
+
+Dependency Injection:
+
+- Providers and wiring in `internal/di`
+- Regenerated via `task wire`
+- Checked via `task wire-check`
 
 ## Prerequisites
+
 - Go `1.24.11`
 - [Task](https://taskfile.dev/)
-- [Bazelisk](https://github.com/bazelbuild/bazelisk) (Bazel-first build/test)
-- Docker (optional for local stack)
+- [Bazelisk](https://github.com/bazelbuild/bazelisk)
+- Docker and Docker Compose (for local stack)
 
-## Taskfile Layout
-- Root loader: `Taskfile.yaml`
-- Modular task definitions:
-  - `taskfiles/bazel.yaml`
-  - `taskfiles/go.yaml`
-  - `taskfiles/app.yaml`
-  - `taskfiles/obs.yaml`
-  - `taskfiles/ci.yaml`
-- Existing commands remain the same, for example:
-  - `task ci`
-  - `task bazel:build`
-  - `task migrate`
+## Taskfile Organization
 
-## Setup
-1. Copy env file:
-   - `cp .env.example .env`
-2. Fill Google OAuth credentials in `.env`.
-3. Ensure Google OAuth redirect URL is: `http://localhost:8080/api/v1/auth/google/callback`
+Root `Taskfile.yaml` includes modular files with `flatten: true`:
 
-## Dependency Injection
-- Composition uses Google Wire in `internal/di`.
-- Regenerate injectors:
-  - `task wire`
-- Verify generated graph is up to date:
-  - `task wire-check`
+- `taskfiles/app.yaml`
+- `taskfiles/bazel.yaml`
+- `taskfiles/go.yaml`
+- `taskfiles/obs.yaml`
+- `taskfiles/ci.yaml`
 
-## Run
-- `task migrate`
+Your command surface stays simple, for example:
+
 - `task run`
-- `task bazel:run`
+- `task ci`
+- `task bazel:build`
+- `task migrate`
+- `task obs-validate`
 
-## Operational Commands
-- `go run ./cmd/migrate up|status|plan`
-- `go run ./cmd/seed apply|dry-run`
-- `go run ./cmd/loadgen run --profile mixed --duration 15s`
+## Quickstart
+
+1. Create environment file:
+   - `cp .env.example .env`
+2. Fill required secrets and OAuth values in `.env`.
+3. Run local dependencies:
+   - `task docker-up`
+4. Apply schema:
+   - `task migrate`
+5. Run API:
+   - `task run`
+6. Open API and observability endpoints:
+   - API: `http://localhost:8080`
+   - Grafana: `http://localhost:3000` (`admin/admin`)
+
+## Configuration
+
+Configuration is loaded and validated in `internal/config/config.go`.
+
+## Required Environment Variables
+
+- `DATABASE_URL`
+- `JWT_ACCESS_SECRET` (>= 32 chars)
+- `JWT_REFRESH_SECRET` (>= 32 chars and different from access secret)
+- `REFRESH_TOKEN_PEPPER` (>= 16 chars)
+- `OAUTH_STATE_SECRET` (>= 16 chars)
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+
+## Common Optional Environment Variables
+
+- `APP_ENV` (default `development`)
+- `HTTP_PORT` (default `8080`)
+- `GOOGLE_OAUTH_REDIRECT_URL` (default callback URL)
+- `BOOTSTRAP_ADMIN_EMAIL`
+- `AUTH_RATE_LIMIT_PER_MIN` (default `30`)
+- `API_RATE_LIMIT_PER_MIN` (default `120`)
+- `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAMESITE`
+- `CORS_ALLOWED_ORIGINS`
+
+OTel:
+
+- `OTEL_SERVICE_NAME`
+- `OTEL_ENVIRONMENT`
+- `OTEL_EXPORTER_OTLP_ENDPOINT`
+- `OTEL_EXPORTER_OTLP_INSECURE`
+- `OTEL_METRICS_ENABLED`
+- `OTEL_TRACING_ENABLED`
+- `OTEL_LOGS_ENABLED`
+- `OTEL_METRICS_EXPORT_INTERVAL`
+- `OTEL_TRACE_SAMPLING_RATIO`
+- `OTEL_LOG_LEVEL`
+
+## Important Note About `.env.example`
+
+`config.Load()` defaults use the current service naming (`secure-observable-go-backend-starter-kit`), but `.env.example` still contains older sample values (`go-oauth-rbac-service`) for `JWT_ISSUER`, `JWT_AUDIENCE`, and `OTEL_SERVICE_NAME`.
+
+For consistency, set these in your `.env` to current names:
+
+- `JWT_ISSUER=secure-observable-go-backend-starter-kit`
+- `JWT_AUDIENCE=secure-observable-go-backend-starter-kit-api`
+- `OTEL_SERVICE_NAME=secure-observable-go-backend-starter-kit`
+
+## API Surface
+
+Key routes are in `internal/http/router/router.go`.
+
+Public/health:
+
+- `GET /health/live`
+- `GET /health/ready`
+
+Auth:
+
+- `GET /api/v1/auth/google/login`
+- `GET /api/v1/auth/google/callback`
+- `POST /api/v1/auth/refresh` (CSRF required)
+- `POST /api/v1/auth/logout` (auth + CSRF required)
+
+User:
+
+- `GET /api/v1/me` (auth required)
+
+Admin (auth + permission checks):
+
+- `GET /api/v1/admin/users` (`users:read`)
+- `PATCH /api/v1/admin/users/{id}/roles` (`users:write`)
+- `GET /api/v1/admin/roles` (`roles:read`)
+- `POST /api/v1/admin/roles` (`roles:write`)
+- `GET /api/v1/admin/permissions` (`permissions:read`)
+
+OpenAPI spec:
+
+- `api/openapi.yaml`
+
+## Security Model
+
+- Access/refresh tokens are managed via secure HTTP-only cookies.
+- CSRF token validation is enforced for mutating cookie-auth endpoints.
+- Request IDs are attached through middleware for log correlation.
+- RBAC is permission-based and enforced in route middleware.
+- Auth and API endpoints use separate fixed-window rate limiters.
+
+## Command-Line Tools (`cmd/*`)
+
+All tools use Cobra and default to TUI output via Bubble Tea/Lip Gloss.
+Use `--ci` for non-interactive JSON output.
+
+## `cmd/api`
+
+Run the API server:
+
+- `go run ./cmd/api`
+
+## `cmd/migrate`
+
+- `go run ./cmd/migrate up`
+- `go run ./cmd/migrate status`
+- `go run ./cmd/migrate plan`
+
+Key flags:
+
+- `--env-file` (default `.env`)
+- `--timeout` (default `30s`)
+- `--ci`
+
+## `cmd/seed`
+
+- `go run ./cmd/seed apply`
+- `go run ./cmd/seed dry-run`
+
+Key flags:
+
+- `--env-file` (default `.env`)
+- `--bootstrap-admin-email`
+- `--ci`
+
+## `cmd/loadgen`
+
+- `go run ./cmd/loadgen run`
+
+Key flags:
+
+- `--base-url` (default `http://localhost:8080`)
+- `--profile` (`auth`, `mixed`, `error-heavy`)
+- `--duration`
+- `--rps`
+- `--concurrency`
+- `--seed`
+- `--ci`
+
+## `cmd/obscheck`
+
 - `go run ./cmd/obscheck run`
 
-Notes:
-- Commands are TUI-first by default (Bubble Tea + Lip Gloss).
-- Use `--ci` for deterministic non-interactive JSON output.
+Validates exemplar -> trace -> log path through Grafana datasources.
 
-## Bazel
-- Build all targets:
-  - `task bazel:build`
-- Run all Bazel tests:
-  - `task bazel:test`
-- Regenerate BUILD files with Gazelle:
-  - `task gazelle`
-- Verify Gazelle left no diffs:
-  - `task gazelle:check`
+Key flags:
 
-Notes:
-- Bazel uses a pinned supported Go SDK (`1.24.11`) via `rules_go`.
-- Host `go` should be `1.24.11` to match Bazel and CI.
+- `--grafana-url` (default `http://localhost:3000`)
+- `--grafana-user` / `--grafana-password`
+- `--service-name`
+- `--window`
+- `--base-url`
+- `--ci`
 
-## Local Observability Stack
-- Start local stack with collector + Grafana + Tempo + Loki + Mimir:
-  - `task docker-up`
-- Services:
-  - API: `http://localhost:8080`
-  - Grafana: `http://localhost:3000` (default `admin/admin`)
-  - Tempo: `http://localhost:3200`
-  - Loki: `http://localhost:3100`
-  - Mimir: `http://localhost:9009`
-  - OTel Collector health: `http://localhost:13133`
-- Collector receives OTLP on:
-  - gRPC `localhost:4317`
-  - HTTP `localhost:4318`
+## Task Reference
 
-## Test and Checks
-- `task ci` (recommended full local gate, Bazel-first)
-- `task cli:smoke` (build/execute CLI help paths)
-- `task tidy-check`
-- `task wire-check`
-- `task test`
-- `task lint`
-- `task obs-validate` (generates traffic and verifies metric exemplar -> Tempo trace -> Loki log correlation)
+App/runtime:
 
-## Git Hooks
-- Install repository-managed hooks:
-  - `task hooks-install`
-- Hooks provided:
-  - `pre-commit`: gofmt staged `.go` files and `go mod tidy` (stages `go.mod`/`go.sum`)
-  - `pre-push`: runs `task ci`
-
-## Docker
+- `task run`
+- `task migrate`
+- `task migrate:status`
+- `task migrate:plan`
+- `task seed`
+- `task seed:dry-run`
 - `task docker-up`
 - `task docker-down`
 
-## API
-- Health: `/health/live`, `/health/ready`
-- OpenAPI: `api/openapi.yaml`
+Bazel:
 
-## Notes
-- Access and refresh tokens are set as secure HTTP-only cookies.
-- Auth and API routes use fixed-window IP rate limiting (configurable via env).
-- Mutating cookie-auth endpoints require `X-CSRF-Token` matching `csrf_token` cookie.
-- First admin can be bootstrapped with `BOOTSTRAP_ADMIN_EMAIL`.
-- OTel metrics, tracing, and logs are powered by the OpenTelemetry Go SDK and exported through the collector.
-- Mimir exemplar ingestion is explicitly enabled via `limits.max_global_exemplars_per_user`.
+- `task bazel:build`
+- `task bazel:test`
+- `task bazel:run`
+- `task gazelle`
+- `task gazelle:check`
+
+Go checks:
+
+- `task test`
+- `task lint`
+- `task tidy-check`
+- `task wire`
+- `task wire-check`
+- `task cli:smoke`
+
+Observability:
+
+- `task obs-generate-traffic`
+- `task obs-validate`
+
+Quality gate:
+
+- `task ci`
+
+## Build and Test Strategy
+
+Bazel-first workflow:
+
+- Build all: `task bazel:build`
+- Test all Bazel tests: `task bazel:test`
+
+Go-native checks:
+
+- `task test`
+- `task lint`
+
+Generation checks:
+
+- `task gazelle:check`
+- `task wire-check`
+- `task tidy-check`
+
+Pinned versions:
+
+- Go toolchain pinned to `1.24.11` in `go.mod` and Bazel module setup.
+
+## CI Pipeline
+
+GitHub Actions workflow: `.github/workflows/ci.yml`
+
+Pipeline steps:
+
+1. Checkout
+2. Setup Go from `go.mod`
+3. Install Task
+4. Setup Bazelisk
+5. Run `task bazel:build`
+6. Run `task bazel:test`
+7. Run `task gazelle:check`
+8. Run `task tidy-check`
+9. Run `task wire-check`
+
+## Git Hooks
+
+Install repository hooks:
+
+- `task hooks-install`
+
+Hooks:
+
+- `.githooks/pre-commit`
+  - formats staged `.go` files with `gofmt`
+  - runs `go mod tidy`
+- `.githooks/pre-push`
+  - runs `task ci`
+
+## Local Observability Stack
+
+`docker-compose.yml` starts:
+
+- Postgres
+- OTel Collector
+- Tempo
+- Loki
+- Mimir
+- Grafana
+- API
+
+Ports:
+
+- API: `8080`
+- Grafana: `3000`
+- Tempo: `3200`
+- Loki: `3100`
+- Mimir: `9009`
+- Collector OTLP gRPC: `4317`
+- Collector OTLP HTTP: `4318`
+- Collector health: `13133`
+
+Validation flow:
+
+- `task obs-generate-traffic`
+- `task obs-validate`
+
+The validation command checks:
+
+- metric exemplar exists
+- trace retrievable in Tempo
+- correlated trace log retrievable in Loki
+
+## Troubleshooting
+
+### App fails to start with config validation errors
+
+- Check required env vars in `.env`.
+- Ensure secret lengths satisfy validation rules.
+
+### Bazel/Gazelle check fails
+
+- Run:
+  - `task gazelle`
+  - `task tidy-check`
+  - `task wire-check`
+
+### `obs-validate` fails with no trace/log correlation
+
+- Ensure stack is up: `task docker-up`
+- Confirm Grafana auth (`admin/admin` unless changed)
+- Re-run with fresh traffic:
+  - `task obs-generate-traffic`
+  - `task obs-validate`
+
+### OAuth callback issues
+
+- Verify Google OAuth app redirect URI exactly matches:
+  - `http://localhost:8080/api/v1/auth/google/callback`
+
+## License
+
+MIT License. See `LICENSE`.
+
+Copyright (c) Sandeep Vishnu.
