@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "health",
+    srcs = [
+        "checker.go",
+        "dependency.go",
+    ],
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/health",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_redis_go_redis_v9//:go-redis",
+        "@io_gorm_gorm//:gorm",
+    ],
+)
+
+go_test(
+    name = "health_test",
+    srcs = ["checker_test.go"],
+    embed = [":health"],
+)

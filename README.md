@@ -215,6 +215,11 @@ Configuration is loaded and validated in `internal/config/config.go`.
 - `API_RATE_LIMIT_PER_MIN` (default `120`)
 - `RATE_LIMIT_REDIS_ENABLED` (default `true`)
 - `REDIS_ADDR`, `REDIS_PASSWORD`, `REDIS_DB`, `RATE_LIMIT_REDIS_PREFIX`
+- `READINESS_PROBE_TIMEOUT` (default `1s`)
+- `SERVER_START_GRACE_PERIOD` (default `2s`)
+- `SHUTDOWN_TIMEOUT` (default `20s`)
+- `SHUTDOWN_HTTP_DRAIN_TIMEOUT` (default `10s`)
+- `SHUTDOWN_OBSERVABILITY_TIMEOUT` (default `8s`)
 - `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAMESITE`
 - `CORS_ALLOWED_ORIGINS`
 
@@ -237,6 +242,22 @@ OTel:
 - `JWT_ISSUER=secure-observable-go-backend-starter-kit`
 - `JWT_AUDIENCE=secure-observable-go-backend-starter-kit-api`
 - `OTEL_SERVICE_NAME=secure-observable-go-backend-starter-kit`
+
+## Production Hardening
+
+- Graceful shutdown uses phased timeouts:
+- `SHUTDOWN_HTTP_DRAIN_TIMEOUT` for HTTP server drain.
+- `SHUTDOWN_OBSERVABILITY_TIMEOUT` for OTel provider shutdown.
+- `SHUTDOWN_TIMEOUT` as total ceiling.
+- Readiness is dependency-backed (`/health/ready`) and checks DB and Redis with `READINESS_PROBE_TIMEOUT`.
+- Startup grace can be controlled via `SERVER_START_GRACE_PERIOD`; during grace, readiness returns unready.
+- Config enforces stricter production/staging rules:
+- secure cookies (`COOKIE_SECURE=true`)
+- restricted samesite (`lax` or `strict`)
+- Redis-backed rate limiting enabled
+- non-loopback Redis address
+- bounded sampling ratio (`OTEL_TRACE_SAMPLING_RATIO <= 0.2`)
+- non-placeholder secrets
 
 ## API Surface
 

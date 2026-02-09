@@ -51,10 +51,11 @@ func InitializeApp() (*app.App, error) {
 	universalClient := provideRedisClient(configConfig)
 	globalRateLimiterFunc := provideGlobalRateLimiter(configConfig, universalClient)
 	authRateLimiterFunc := provideAuthRateLimiter(configConfig, universalClient)
-	dependencies := provideRouterDependencies(authHandler, userHandler, adminHandler, jwtManager, rbacService, globalRateLimiterFunc, authRateLimiterFunc, configConfig)
+	probeRunner := provideReadinessProbeRunner(configConfig, db, universalClient)
+	dependencies := provideRouterDependencies(authHandler, userHandler, adminHandler, jwtManager, rbacService, globalRateLimiterFunc, authRateLimiterFunc, probeRunner, configConfig)
 	httpHandler := router.NewRouter(dependencies)
 	server := provideHTTPServer(configConfig, httpHandler)
-	appApp := provideApp(configConfig, logger, server, runtime)
+	appApp := provideApp(configConfig, logger, server, runtime, db, universalClient, probeRunner)
 	return appApp, nil
 }
 

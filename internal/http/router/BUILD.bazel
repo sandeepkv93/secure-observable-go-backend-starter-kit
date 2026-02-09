@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/router",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/health",
         "//internal/http/handler",
         "//internal/http/middleware",
         "//internal/http/response",

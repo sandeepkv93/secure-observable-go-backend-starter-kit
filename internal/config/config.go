@@ -35,13 +35,18 @@ type Config struct {
 	AuthLocalRequireEmailVerification bool
 	BootstrapAdminEmail               string
 
-	AuthRateLimitPerMin   int
-	APIRateLimitPerMin    int
-	RateLimitRedisEnabled bool
-	RedisAddr             string
-	RedisPassword         string
-	RedisDB               int
-	RateLimitRedisPrefix  string
+	AuthRateLimitPerMin          int
+	APIRateLimitPerMin           int
+	RateLimitRedisEnabled        bool
+	RedisAddr                    string
+	RedisPassword                string
+	RedisDB                      int
+	RateLimitRedisPrefix         string
+	ReadinessProbeTimeout        time.Duration
+	ServerStartGracePeriod       time.Duration
+	ShutdownTimeout              time.Duration
+	ShutdownHTTPDrainTimeout     time.Duration
+	ShutdownObservabilityTimeout time.Duration
 
 	OTELServiceName           string
 	OTELEnvironment           string
@@ -123,6 +128,36 @@ func Load() (*Config, error) {
 	}
 	cfg.OTELMetricsExportInterval = metricsInterval
 
+	readinessTimeout, err := time.ParseDuration(getEnv("READINESS_PROBE_TIMEOUT", "1s"))
+	if err != nil {
+		return nil, fmt.Errorf("parse READINESS_PROBE_TIMEOUT: %w", err)
+	}
+	cfg.ReadinessProbeTimeout = readinessTimeout
+
+	startGrace, err := time.ParseDuration(getEnv("SERVER_START_GRACE_PERIOD", "2s"))
+	if err != nil {
+		return nil, fmt.Errorf("parse SERVER_START_GRACE_PERIOD: %w", err)
+	}
+	cfg.ServerStartGracePeriod = startGrace
+
+	shutdownTimeout, err := time.ParseDuration(getEnv("SHUTDOWN_TIMEOUT", "20s"))
+	if err != nil {
+		return nil, fmt.Errorf("parse SHUTDOWN_TIMEOUT: %w", err)
+	}
+	cfg.ShutdownTimeout = shutdownTimeout
+
+	httpDrainTimeout, err := time.ParseDuration(getEnv("SHUTDOWN_HTTP_DRAIN_TIMEOUT", "10s"))
+	if err != nil {
+		return nil, fmt.Errorf("parse SHUTDOWN_HTTP_DRAIN_TIMEOUT: %w", err)
+	}
+	cfg.ShutdownHTTPDrainTimeout = httpDrainTimeout
+
+	obsShutdownTimeout, err := time.ParseDuration(getEnv("SHUTDOWN_OBSERVABILITY_TIMEOUT", "8s"))
+	if err != nil {
+		return nil, fmt.Errorf("parse SHUTDOWN_OBSERVABILITY_TIMEOUT: %w", err)
+	}
+	cfg.ShutdownObservabilityTimeout = obsShutdownTimeout
+
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -176,6 +211,24 @@ func (c *Config) Validate() error {
 	if c.RateLimitRedisEnabled && strings.TrimSpace(c.RedisAddr) == "" {
 		errs = append(errs, "REDIS_ADDR is required when RATE_LIMIT_REDIS_ENABLED=true")
 	}
+	if c.ReadinessProbeTimeout <= 0 {
+		errs = append(errs, "READINESS_PROBE_TIMEOUT must be > 0")
+	}
+	if c.ShutdownTimeout <= 0 {
+		errs = append(errs, "SHUTDOWN_TIMEOUT must be > 0")
+	}
+	if c.ShutdownHTTPDrainTimeout <= 0 {
+		errs = append(errs, "SHUTDOWN_HTTP_DRAIN_TIMEOUT must be > 0")
+	}
+	if c.ShutdownObservabilityTimeout <= 0 {
+		errs = append(errs, "SHUTDOWN_OBSERVABILITY_TIMEOUT must be > 0")
+	}
+	if c.ShutdownHTTPDrainTimeout > c.ShutdownTimeout {
+		errs = append(errs, "SHUTDOWN_HTTP_DRAIN_TIMEOUT must be <= SHUTDOWN_TIMEOUT")
+	}
+	if c.ShutdownObservabilityTimeout > c.ShutdownTimeout {
+		errs = append(errs, "SHUTDOWN_OBSERVABILITY_TIMEOUT must be <= SHUTDOWN_TIMEOUT")
+	}
 	if (c.OTELMetricsEnabled || c.OTELTracingEnabled || c.OTELLogsEnabled) && c.OTELExporterOTLPEndpoint == "" {
 		errs = append(errs, "OTEL_EXPORTER_OTLP_ENDPOINT is required when OTel is enabled")
 	}
@@ -187,6 +240,29 @@ func (c *Config) Validate() error {
 	}
 	if !isValidLogLevel(c.OTELLogLevel) {
 		errs = append(errs, "OTEL_LOG_LEVEL must be one of debug, info, warn, error")
+	}
+	if c.isProdLike() {
+		if !c.CookieSecure {
+			errs = append(errs, "COOKIE_SECURE must be true in production/staging")
+		}
+		switch c.CookieSameSite {
+		case "lax", "strict":
+		default:
+			errs = append(errs, "COOKIE_SAMESITE must be lax or strict in production/staging")
+		}
+		if !c.RateLimitRedisEnabled {
+			errs = append(errs, "RATE_LIMIT_REDIS_ENABLED must be true in production/staging")
+		}
+		if isLoopbackAddr(c.RedisAddr) {
+			errs = append(errs, "REDIS_ADDR must not be loopback in production/staging")
+		}
+		if c.OTELTraceSamplingRatio > 0.2 {
+			errs = append(errs, "OTEL_TRACE_SAMPLING_RATIO must be <= 0.2 in production/staging")
+		}
+		if looksPlaceholder(c.JWTAccessSecret) || looksPlaceholder(c.JWTRefreshSecret) ||
+			looksPlaceholder(c.RefreshTokenPepper) || looksPlaceholder(c.StateSigningSecret) {
+			errs = append(errs, "secrets must not use placeholder values in production/staging")
+		}
 	}
 	if len(errs) > 0 {
 		return errors.New(strings.Join(errs, "; "))
@@ -210,6 +286,27 @@ func isValidLogLevel(v string) bool {
 	default:
 		return false
 	}
+}
+
+func (c *Config) isProdLike() bool {
+	switch strings.ToLower(strings.TrimSpace(c.Env)) {
+	case "production", "prod", "staging", "stage", "preprod":
+		return true
+	default:
+		return false
+	}
+}
+
+func isLoopbackAddr(addr string) bool {
+	addr = strings.TrimSpace(strings.ToLower(addr))
+	return strings.HasPrefix(addr, "localhost:") ||
+		strings.HasPrefix(addr, "127.0.0.1:") ||
+		strings.HasPrefix(addr, "0.0.0.0:")
+}
+
+func looksPlaceholder(v string) bool {
+	v = strings.ToLower(strings.TrimSpace(v))
+	return strings.Contains(v, "replace-with") || strings.Contains(v, "changeme") || strings.Contains(v, "example")
 }
 
 func getEnv(key, def string) string {

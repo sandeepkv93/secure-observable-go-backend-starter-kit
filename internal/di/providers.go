@@ -14,6 +14,7 @@ import (
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/app"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/database"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/health"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/handler"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/middleware"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/router"
@@ -33,6 +34,7 @@ var ObservabilitySet = wire.NewSet(
 var RuntimeInfraSet = wire.NewSet(
 	provideRuntimeDB,
 	provideRedisClient,
+	provideReadinessProbeRunner,
 )
 
 var RepositorySet = wire.NewSet(
@@ -185,6 +187,7 @@ func provideRouterDependencies(
 	rbac service.RBACAuthorizer,
 	globalRateLimiter router.GlobalRateLimiterFunc,
 	authRateLimiter router.AuthRateLimiterFunc,
+	readiness *health.ProbeRunner,
 	cfg *config.Config,
 ) router.Dependencies {
 	return router.Dependencies{
@@ -198,6 +201,7 @@ func provideRouterDependencies(
 		APIRateLimitRPM:   cfg.APIRateLimitPerMin,
 		GlobalRateLimiter: globalRateLimiter,
 		AuthRateLimiter:   authRateLimiter,
+		Readiness:         readiness,
 		EnableOTelHTTP:    cfg.OTELMetricsEnabled || cfg.OTELTracingEnabled,
 	}
 }
@@ -213,6 +217,27 @@ func provideHTTPServer(cfg *config.Config, h http.Handler) *http.Server {
 	}
 }
 
-func provideApp(cfg *config.Config, logger *slog.Logger, server *http.Server, runtime *observability.Runtime) *app.App {
-	return app.New(cfg, logger, server, runtime)
+func provideReadinessProbeRunner(cfg *config.Config, db *gorm.DB, redisClient redis.UniversalClient) *health.ProbeRunner {
+	checkers := make([]health.Checker, 0, 2)
+	if c := health.NewDBChecker(db); c != nil {
+		checkers = append(checkers, c)
+	}
+	if cfg.RateLimitRedisEnabled {
+		if c := health.NewRedisChecker(redisClient); c != nil {
+			checkers = append(checkers, c)
+		}
+	}
+	return health.NewProbeRunner(cfg.ReadinessProbeTimeout, cfg.ServerStartGracePeriod, checkers...)
+}
+
+func provideApp(
+	cfg *config.Config,
+	logger *slog.Logger,
+	server *http.Server,
+	runtime *observability.Runtime,
+	db *gorm.DB,
+	redisClient redis.UniversalClient,
+	readiness *health.ProbeRunner,
+) *app.App {
+	return app.New(cfg, logger, server, runtime, db, redisClient, readiness)
 }

@@ -1,8 +1,14 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "config",
     srcs = ["config.go"],
     importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config",
     visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "config_test",
+    srcs = ["config_profile_test.go"],
+    embed = [":config"],
 )

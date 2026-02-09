@@ -7,6 +7,9 @@ go_library(
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/config",
+        "//internal/health",
         "//internal/observability",
+        "@com_github_redis_go_redis_v9//:go-redis",
+        "@io_gorm_gorm//:gorm",
     ],
 )

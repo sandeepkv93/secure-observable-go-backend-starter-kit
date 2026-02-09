@@ -12,6 +12,7 @@ go_library(
         "//internal/app",
         "//internal/config",
         "//internal/database",
+        "//internal/health",
         "//internal/http/handler",
         "//internal/http/middleware",
         "//internal/http/router",

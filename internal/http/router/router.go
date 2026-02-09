@@ -8,6 +8,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/health"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/handler"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/middleware"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/response"
@@ -26,6 +27,7 @@ type Dependencies struct {
 	APIRateLimitRPM   int
 	GlobalRateLimiter GlobalRateLimiterFunc
 	AuthRateLimiter   AuthRateLimiterFunc
+	Readiness         *health.ProbeRunner
 	EnableOTelHTTP    bool
 }
 
@@ -56,7 +58,16 @@ func NewRouter(dep Dependencies) http.Handler {
 		response.JSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	r.Get("/health/ready", func(w http.ResponseWriter, r *http.Request) {
-		response.JSON(w, r, http.StatusOK, map[string]string{"status": "ready"})
+		if dep.Readiness == nil {
+			response.JSON(w, r, http.StatusOK, map[string]any{"status": "ready", "checks": []any{}})
+			return
+		}
+		ready, results := dep.Readiness.Ready(r.Context())
+		if ready {
+			response.JSON(w, r, http.StatusOK, map[string]any{"status": "ready", "checks": results})
+			return
+		}
+		response.Error(w, r, http.StatusServiceUnavailable, "DEPENDENCY_UNREADY", "dependencies are not ready", map[string]any{"checks": results})
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
