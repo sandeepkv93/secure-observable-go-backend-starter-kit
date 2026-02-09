@@ -1,4 +1,7 @@
 # go-oauth-rbac-service
+[![CI](https://github.com/sandeepkv93/go-oauth-rbac-service/actions/workflows/ci.yml/badge.svg)](https://github.com/sandeepkv93/go-oauth-rbac-service/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)](https://go.dev/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 REST API service in Go with Google OAuth login, JWT auth, secure cookie sessions, RBAC authorization, and OpenTelemetry observability.
 
