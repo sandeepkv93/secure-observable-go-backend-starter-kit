@@ -9,6 +9,7 @@ import (
 func Migrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&domain.User{},
+		&domain.LocalCredential{},
 		&domain.Role{},
 		&domain.Permission{},
 		&domain.UserRole{},

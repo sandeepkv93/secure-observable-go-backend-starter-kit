@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/domain"
 
@@ -60,5 +61,26 @@ func Seed(db *gorm.DB, bootstrapAdminEmail string) error {
 		return fmt.Errorf("assign bootstrap admin role: %w", err)
 	}
 
+	return nil
+}
+
+func VerifyLocalEmail(db *gorm.DB, email string) error {
+	normalized := strings.TrimSpace(strings.ToLower(email))
+	if normalized == "" {
+		return fmt.Errorf("email is required")
+	}
+	var u domain.User
+	if err := db.Where("email = ?", normalized).First(&u).Error; err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	tx := db.Model(&domain.LocalCredential{}).Where("user_id = ?", u.ID).
+		Updates(map[string]any{"email_verified": true, "email_verified_at": &now})
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
 	return nil
 }

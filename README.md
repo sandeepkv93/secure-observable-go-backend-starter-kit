@@ -236,6 +236,9 @@ Auth:
 
 - `GET /api/v1/auth/google/login`
 - `GET /api/v1/auth/google/callback`
+- `POST /api/v1/auth/local/register`
+- `POST /api/v1/auth/local/login`
+- `POST /api/v1/auth/local/change-password` (auth + CSRF required)
 - `POST /api/v1/auth/refresh` (CSRF required)
 - `POST /api/v1/auth/logout` (auth + CSRF required)
 
@@ -295,6 +298,7 @@ App/runtime:
 - `task migrate:plan`
 - `task seed`
 - `task seed:dry-run`
+- `task seed:verify-local-email`
 - `task docker-up`
 - `task docker-down`
 

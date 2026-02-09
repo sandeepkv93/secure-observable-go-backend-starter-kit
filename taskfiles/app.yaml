@@ -25,6 +25,10 @@ tasks:
     cmds:
       - go run ./cmd/seed dry-run
 
+  seed:verify-local-email:
+    cmds:
+      - go run ./cmd/seed verify-local-email
+
   hooks-install:
     cmds:
       - git config core.hooksPath .githooks

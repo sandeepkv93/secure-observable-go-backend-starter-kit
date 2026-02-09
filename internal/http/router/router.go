@@ -51,10 +51,13 @@ func NewRouter(dep Dependencies) http.Handler {
 		r.Route("/auth", func(r chi.Router) {
 			r.With(authLimiter.Middleware()).Get("/google/login", dep.AuthHandler.GoogleLogin)
 			r.With(authLimiter.Middleware()).Get("/google/callback", dep.AuthHandler.GoogleCallback)
+			r.With(authLimiter.Middleware()).Post("/local/register", dep.AuthHandler.LocalRegister)
+			r.With(authLimiter.Middleware()).Post("/local/login", dep.AuthHandler.LocalLogin)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.CSRFMiddleware)
 				r.With(authLimiter.Middleware()).Post("/refresh", dep.AuthHandler.Refresh)
 				r.With(middleware.AuthMiddleware(dep.JWTManager)).Post("/logout", dep.AuthHandler.Logout)
+				r.With(middleware.AuthMiddleware(dep.JWTManager), authLimiter.Middleware()).Post("/local/change-password", dep.AuthHandler.LocalChangePassword)
 			})
 		})
 

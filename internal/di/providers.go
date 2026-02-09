@@ -38,6 +38,7 @@ var RepositorySet = wire.NewSet(
 	repository.NewPermissionRepository,
 	repository.NewSessionRepository,
 	repository.NewOAuthRepository,
+	repository.NewLocalCredentialRepository,
 )
 
 var SecuritySet = wire.NewSet(

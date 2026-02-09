@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
@@ -26,7 +27,7 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&opts.envFile, "env-file", ".env", "path to env file")
 	cmd.PersistentFlags().StringVar(&opts.bootstrapAdminEmail, "bootstrap-admin-email", "", "override bootstrap admin email")
 	cmd.PersistentFlags().BoolVar(&opts.ci, "ci", false, "non-interactive machine-readable output")
-	cmd.AddCommand(newApplyCommand(opts), newDryRunCommand(opts))
+	cmd.AddCommand(newApplyCommand(opts), newDryRunCommand(opts), newVerifyLocalEmailCommand(opts))
 	return cmd
 }
 
@@ -97,6 +98,38 @@ func newDryRunCommand(opts *options) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newVerifyLocalEmailCommand(opts *options) *cobra.Command {
+	var email string
+	cmd := &cobra.Command{
+		Use:   "verify-local-email",
+		Short: "Mark local credential email as verified",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			details, err := run(opts, "seed verify-local-email", func(ctx context.Context) ([]string, error) {
+				if strings.TrimSpace(email) == "" {
+					return nil, fmt.Errorf("email is required")
+				}
+				_, db, err := loadConfigDB(opts.envFile)
+				if err != nil {
+					return nil, err
+				}
+				if err := database.VerifyLocalEmail(db, email); err != nil {
+					return nil, err
+				}
+				return []string{fmt.Sprintf("marked local email verified: %s", strings.TrimSpace(strings.ToLower(email)))}, nil
+			})
+			if opts.ci {
+				common.PrintCIResult(err == nil, "seed verify-local-email", details, err)
+			}
+			if err != nil {
+				os.Exit(3)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&email, "email", "", "email to mark verified")
+	return cmd
 }
 
 func run(opts *options, title string, fn func(context.Context) ([]string, error)) ([]string, error) {

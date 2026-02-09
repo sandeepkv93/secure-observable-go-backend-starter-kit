@@ -15,22 +15,25 @@ type Config struct {
 
 	DatabaseURL string
 
-	JWTIssuer           string
-	JWTAudience         string
-	JWTAccessSecret     string
-	JWTRefreshSecret    string
-	JWTAccessTTL        time.Duration
-	JWTRefreshTTL       time.Duration
-	RefreshTokenPepper  string
-	StateSigningSecret  string
-	CookieDomain        string
-	CookieSecure        bool
-	CookieSameSite      string
-	CORSAllowedOrigins  []string
-	GoogleClientID      string
-	GoogleClientSecret  string
-	GoogleRedirectURL   string
-	BootstrapAdminEmail string
+	JWTIssuer                         string
+	JWTAudience                       string
+	JWTAccessSecret                   string
+	JWTRefreshSecret                  string
+	JWTAccessTTL                      time.Duration
+	JWTRefreshTTL                     time.Duration
+	RefreshTokenPepper                string
+	StateSigningSecret                string
+	CookieDomain                      string
+	CookieSecure                      bool
+	CookieSameSite                    string
+	CORSAllowedOrigins                []string
+	GoogleClientID                    string
+	GoogleClientSecret                string
+	GoogleRedirectURL                 string
+	AuthGoogleEnabled                 bool
+	AuthLocalEnabled                  bool
+	AuthLocalRequireEmailVerification bool
+	BootstrapAdminEmail               string
 
 	AuthRateLimitPerMin int
 	APIRateLimitPerMin  int
@@ -48,29 +51,41 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
+	env := getEnv("APP_ENV", "development")
+	googleClientID := os.Getenv("GOOGLE_OAUTH_CLIENT_ID")
+	googleClientSecret := os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+	googleEnabled := getEnvBool("AUTH_GOOGLE_ENABLED", true)
+	if _, explicitlySet := os.LookupEnv("AUTH_GOOGLE_ENABLED"); !explicitlySet &&
+		(googleClientID == "" || googleClientSecret == "") && isLocalLikeEnv(env) {
+		googleEnabled = false
+	}
+
 	cfg := &Config{
-		Env:                 getEnv("APP_ENV", "development"),
-		HTTPPort:            getEnv("HTTP_PORT", "8080"),
-		DatabaseURL:         os.Getenv("DATABASE_URL"),
-		JWTIssuer:           getEnv("JWT_ISSUER", "secure-observable-go-backend-starter-kit"),
-		JWTAudience:         getEnv("JWT_AUDIENCE", "secure-observable-go-backend-starter-kit-api"),
-		JWTAccessSecret:     os.Getenv("JWT_ACCESS_SECRET"),
-		JWTRefreshSecret:    os.Getenv("JWT_REFRESH_SECRET"),
-		RefreshTokenPepper:  os.Getenv("REFRESH_TOKEN_PEPPER"),
-		StateSigningSecret:  os.Getenv("OAUTH_STATE_SECRET"),
-		CookieDomain:        os.Getenv("COOKIE_DOMAIN"),
-		CookieSecure:        getEnvBool("COOKIE_SECURE", true),
-		CookieSameSite:      strings.ToLower(getEnv("COOKIE_SAMESITE", "lax")),
-		CORSAllowedOrigins:  splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")),
-		GoogleClientID:      os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
-		GoogleClientSecret:  os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
-		GoogleRedirectURL:   getEnv("GOOGLE_OAUTH_REDIRECT_URL", "http://localhost:8080/api/v1/auth/google/callback"),
-		BootstrapAdminEmail: strings.TrimSpace(strings.ToLower(os.Getenv("BOOTSTRAP_ADMIN_EMAIL"))),
-		AuthRateLimitPerMin: getEnvInt("AUTH_RATE_LIMIT_PER_MIN", 30),
-		APIRateLimitPerMin:  getEnvInt("API_RATE_LIMIT_PER_MIN", 120),
+		Env:                               env,
+		HTTPPort:                          getEnv("HTTP_PORT", "8080"),
+		DatabaseURL:                       os.Getenv("DATABASE_URL"),
+		JWTIssuer:                         getEnv("JWT_ISSUER", "secure-observable-go-backend-starter-kit"),
+		JWTAudience:                       getEnv("JWT_AUDIENCE", "secure-observable-go-backend-starter-kit-api"),
+		JWTAccessSecret:                   os.Getenv("JWT_ACCESS_SECRET"),
+		JWTRefreshSecret:                  os.Getenv("JWT_REFRESH_SECRET"),
+		RefreshTokenPepper:                os.Getenv("REFRESH_TOKEN_PEPPER"),
+		StateSigningSecret:                os.Getenv("OAUTH_STATE_SECRET"),
+		CookieDomain:                      os.Getenv("COOKIE_DOMAIN"),
+		CookieSecure:                      getEnvBool("COOKIE_SECURE", true),
+		CookieSameSite:                    strings.ToLower(getEnv("COOKIE_SAMESITE", "lax")),
+		CORSAllowedOrigins:                splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")),
+		GoogleClientID:                    googleClientID,
+		GoogleClientSecret:                googleClientSecret,
+		GoogleRedirectURL:                 getEnv("GOOGLE_OAUTH_REDIRECT_URL", "http://localhost:8080/api/v1/auth/google/callback"),
+		AuthGoogleEnabled:                 googleEnabled,
+		AuthLocalEnabled:                  getEnvBool("AUTH_LOCAL_ENABLED", true),
+		AuthLocalRequireEmailVerification: getEnvBool("AUTH_LOCAL_REQUIRE_EMAIL_VERIFICATION", false),
+		BootstrapAdminEmail:               strings.TrimSpace(strings.ToLower(os.Getenv("BOOTSTRAP_ADMIN_EMAIL"))),
+		AuthRateLimitPerMin:               getEnvInt("AUTH_RATE_LIMIT_PER_MIN", 30),
+		APIRateLimitPerMin:                getEnvInt("API_RATE_LIMIT_PER_MIN", 120),
 
 		OTELServiceName:          getEnv("OTEL_SERVICE_NAME", "secure-observable-go-backend-starter-kit"),
-		OTELEnvironment:          getEnv("OTEL_ENVIRONMENT", getEnv("APP_ENV", "development")),
+		OTELEnvironment:          getEnv("OTEL_ENVIRONMENT", env),
 		OTELExporterOTLPEndpoint: getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"),
 		OTELExporterOTLPInsecure: getEnvBool("OTEL_EXPORTER_OTLP_INSECURE", true),
 		OTELTraceSamplingRatio:   getEnvFloat("OTEL_TRACE_SAMPLING_RATIO", 1.0),
@@ -124,11 +139,17 @@ func (c *Config) Validate() error {
 	if len(c.StateSigningSecret) < 16 {
 		errs = append(errs, "OAUTH_STATE_SECRET must be at least 16 chars")
 	}
-	if c.GoogleClientID == "" {
-		errs = append(errs, "GOOGLE_OAUTH_CLIENT_ID is required")
+	if !c.AuthLocalEnabled && !c.AuthGoogleEnabled {
+		errs = append(errs, "at least one auth provider must be enabled")
 	}
-	if c.GoogleClientSecret == "" {
-		errs = append(errs, "GOOGLE_OAUTH_CLIENT_SECRET is required")
+	if c.AuthGoogleEnabled && c.GoogleClientID == "" {
+		errs = append(errs, "GOOGLE_OAUTH_CLIENT_ID is required when AUTH_GOOGLE_ENABLED=true")
+	}
+	if c.AuthGoogleEnabled && c.GoogleClientSecret == "" {
+		errs = append(errs, "GOOGLE_OAUTH_CLIENT_SECRET is required when AUTH_GOOGLE_ENABLED=true")
+	}
+	if c.AuthLocalRequireEmailVerification && !c.AuthLocalEnabled {
+		errs = append(errs, "AUTH_LOCAL_REQUIRE_EMAIL_VERIFICATION requires AUTH_LOCAL_ENABLED=true")
 	}
 	if c.JWTAccessTTL <= 0 || c.JWTAccessTTL > time.Hour {
 		errs = append(errs, "JWT_ACCESS_TTL must be between 1s and 1h")
@@ -158,6 +179,15 @@ func (c *Config) Validate() error {
 		return errors.New(strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+func isLocalLikeEnv(env string) bool {
+	switch strings.ToLower(strings.TrimSpace(env)) {
+	case "development", "dev", "local", "test":
+		return true
+	default:
+		return false
+	}
 }
 
 func isValidLogLevel(v string) bool {

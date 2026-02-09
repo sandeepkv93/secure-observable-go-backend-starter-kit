@@ -25,7 +25,10 @@ go_library(
 
 go_test(
     name = "service_test",
-    srcs = ["rbac_service_test.go"],
+    srcs = [
+        "auth_password_policy_test.go",
+        "rbac_service_test.go",
+    ],
     embed = [":service"],
     deps = ["//internal/domain"],
 )

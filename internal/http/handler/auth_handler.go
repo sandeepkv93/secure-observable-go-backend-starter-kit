@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -38,10 +40,18 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to generate oauth state", nil)
 		return
 	}
+	loginURL := h.authSvc.GoogleLoginURL(state)
+	if loginURL == "" {
+		status = "failure"
+		observability.Audit(r, "auth.google.login.failed", "reason", "provider_disabled")
+		observability.RecordAuthLogin(r.Context(), "google", "failure")
+		response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "google auth is disabled", nil)
+		return
+	}
 	signed := security.SignState(state, h.stateKey)
 	http.SetCookie(w, &http.Cookie{Name: "oauth_state", Value: signed, Path: "/api/v1/auth/google", HttpOnly: true, Secure: h.cookieMgr.Secure, SameSite: h.cookieMgr.SameSite, Domain: h.cookieMgr.Domain, MaxAge: 300})
 	observability.Audit(r, "auth.google.login.redirect")
-	http.Redirect(w, r, h.authSvc.GoogleLoginURL(state), http.StatusFound)
+	http.Redirect(w, r, loginURL, http.StatusFound)
 }
 
 func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
@@ -75,6 +85,10 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	result, err := h.authSvc.LoginWithGoogleCode(code, r.UserAgent(), clientIP(r))
 	if err != nil {
 		status = "failure"
+		if errors.Is(err, service.ErrGoogleAuthDisabled) {
+			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "google auth is disabled", nil)
+			return
+		}
 		observability.Audit(r, "auth.google.callback.failed", "reason", "oauth_exchange", "error", err.Error())
 		observability.RecordAuthLogin(r.Context(), "google", "failure")
 		response.Error(w, r, http.StatusUnauthorized, "OAUTH_FAILED", err.Error(), nil)
@@ -149,6 +163,141 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	observability.Audit(r, "auth.logout.success", "user_id", uid)
 	observability.RecordAuthLogout(r.Context(), "success")
 	response.JSON(w, r, http.StatusOK, map[string]string{"status": "logged_out"})
+}
+
+func (h *AuthHandler) LocalRegister(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	status := "success"
+	defer func() {
+		observability.RecordAuthRequestDuration(r.Context(), "local_register", status, time.Since(start))
+	}()
+	var req struct {
+		Email    string `json:"email"`
+		Name     string `json:"name"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		status = "failure"
+		observability.Audit(r, "auth.local.register.failed", "reason", "invalid_payload")
+		observability.RecordAuthLogin(r.Context(), "local", "failure")
+		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
+		return
+	}
+	result, err := h.authSvc.RegisterLocal(req.Email, req.Name, req.Password, r.UserAgent(), clientIP(r))
+	if err != nil {
+		status = "failure"
+		observability.Audit(r, "auth.local.register.failed", "reason", "service_error", "error", err.Error())
+		observability.RecordAuthLogin(r.Context(), "local", "failure")
+		switch {
+		case errors.Is(err, service.ErrLocalAuthDisabled):
+			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "local auth is disabled", nil)
+		case errors.Is(err, service.ErrWeakPassword):
+			response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "password must be 12+ chars and include upper, lower, number, and special char", nil)
+		default:
+			response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
+		}
+		return
+	}
+	if result.RequiresVerification {
+		observability.Audit(r, "auth.local.register.pending_verification", "user_id", result.User.ID)
+		response.JSON(w, r, http.StatusCreated, map[string]any{
+			"user":                  result.User,
+			"requires_verification": true,
+		})
+		return
+	}
+	h.cookieMgr.SetTokenCookies(w, result.AccessToken, result.RefreshToken, result.CSRFToken, h.refreshTTL)
+	observability.Audit(r, "auth.local.register.success", "user_id", result.User.ID)
+	observability.RecordAuthLogin(r.Context(), "local", "success")
+	response.JSON(w, r, http.StatusCreated, map[string]any{"user": result.User, "csrf_token": result.CSRFToken, "expires_at": result.ExpiresAt})
+}
+
+func (h *AuthHandler) LocalLogin(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	status := "success"
+	defer func() {
+		observability.RecordAuthRequestDuration(r.Context(), "local_login", status, time.Since(start))
+	}()
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		status = "failure"
+		observability.Audit(r, "auth.local.login.failed", "reason", "invalid_payload")
+		observability.RecordAuthLogin(r.Context(), "local", "failure")
+		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
+		return
+	}
+	result, err := h.authSvc.LoginWithLocalPassword(req.Email, req.Password, r.UserAgent(), clientIP(r))
+	if err != nil {
+		status = "failure"
+		observability.Audit(r, "auth.local.login.failed", "reason", "login_error", "error", err.Error())
+		observability.RecordAuthLogin(r.Context(), "local", "failure")
+		switch {
+		case errors.Is(err, service.ErrLocalAuthDisabled):
+			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "local auth is disabled", nil)
+		case errors.Is(err, service.ErrLocalEmailUnverified):
+			response.Error(w, r, http.StatusForbidden, "EMAIL_UNVERIFIED", "email verification required", nil)
+		case errors.Is(err, service.ErrInvalidCredentials):
+			response.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "invalid credentials", nil)
+		default:
+			response.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "invalid credentials", nil)
+		}
+		return
+	}
+	h.cookieMgr.SetTokenCookies(w, result.AccessToken, result.RefreshToken, result.CSRFToken, h.refreshTTL)
+	observability.Audit(r, "auth.local.login.success", "user_id", result.User.ID)
+	observability.RecordAuthLogin(r.Context(), "local", "success")
+	response.JSON(w, r, http.StatusOK, map[string]any{"user": result.User, "csrf_token": result.CSRFToken, "expires_at": result.ExpiresAt})
+}
+
+func (h *AuthHandler) LocalChangePassword(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	status := "success"
+	defer func() {
+		observability.RecordAuthRequestDuration(r.Context(), "local_change_password", status, time.Since(start))
+	}()
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		status = "failure"
+		response.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "missing auth context", nil)
+		return
+	}
+	userID, err := h.authSvc.ParseUserID(claims.Subject)
+	if err != nil {
+		status = "failure"
+		response.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "invalid subject", nil)
+		return
+	}
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		status = "failure"
+		observability.Audit(r, "auth.local.change_password.failed", "reason", "invalid_payload", "user_id", userID)
+		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
+		return
+	}
+	if err := h.authSvc.ChangeLocalPassword(userID, req.CurrentPassword, req.NewPassword); err != nil {
+		status = "failure"
+		observability.Audit(r, "auth.local.change_password.failed", "reason", "change_error", "user_id", userID, "error", err.Error())
+		switch {
+		case errors.Is(err, service.ErrLocalAuthDisabled):
+			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "local auth is disabled", nil)
+		case errors.Is(err, service.ErrWeakPassword):
+			response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "password must be 12+ chars and include upper, lower, number, and special char", nil)
+		case errors.Is(err, service.ErrInvalidCredentials):
+			response.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "invalid credentials", nil)
+		default:
+			response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
+		}
+		return
+	}
+	h.cookieMgr.ClearTokenCookies(w)
+	observability.Audit(r, "auth.local.change_password.success", "user_id", userID)
+	response.JSON(w, r, http.StatusOK, map[string]string{"status": "password_changed"})
 }
 
 func clientIP(r *http.Request) string {

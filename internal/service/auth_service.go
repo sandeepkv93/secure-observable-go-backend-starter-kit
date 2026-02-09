@@ -2,40 +2,77 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/mail"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/domain"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/repository"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/security"
+
+	"gorm.io/gorm"
 )
 
 type AuthService struct {
-	cfg      *config.Config
-	oauthSvc *OAuthService
-	tokenSvc *TokenService
-	userSvc  *UserService
-	rbacSvc  *RBACService
+	cfg            *config.Config
+	oauthSvc       *OAuthService
+	tokenSvc       *TokenService
+	userSvc        *UserService
+	roleRepo       repository.RoleRepository
+	localCredsRepo repository.LocalCredentialRepository
 }
 
 type LoginResult struct {
-	User         *domain.User `json:"user"`
-	AccessToken  string       `json:"-"`
-	RefreshToken string       `json:"-"`
-	CSRFToken    string       `json:"csrf_token"`
-	ExpiresAt    time.Time    `json:"expires_at"`
+	User                 *domain.User `json:"user"`
+	AccessToken          string       `json:"-"`
+	RefreshToken         string       `json:"-"`
+	CSRFToken            string       `json:"csrf_token,omitempty"`
+	ExpiresAt            time.Time    `json:"expires_at,omitempty"`
+	RequiresVerification bool         `json:"requires_verification,omitempty"`
 }
 
-func NewAuthService(cfg *config.Config, oauthSvc *OAuthService, tokenSvc *TokenService, userSvc *UserService, rbacSvc *RBACService) *AuthService {
-	return &AuthService{cfg: cfg, oauthSvc: oauthSvc, tokenSvc: tokenSvc, userSvc: userSvc, rbacSvc: rbacSvc}
+var (
+	ErrGoogleAuthDisabled   = errors.New("google auth is disabled")
+	ErrLocalAuthDisabled    = errors.New("local auth is disabled")
+	ErrLocalEmailUnverified = errors.New("email verification required")
+	ErrInvalidCredentials   = errors.New("invalid credentials")
+	ErrWeakPassword         = errors.New("password does not meet policy requirements")
+)
+
+var (
+	uppercaseRe = regexp.MustCompile(`[A-Z]`)
+	lowercaseRe = regexp.MustCompile(`[a-z]`)
+	digitRe     = regexp.MustCompile(`[0-9]`)
+	specialRe   = regexp.MustCompile(`[^A-Za-z0-9]`)
+)
+
+func NewAuthService(cfg *config.Config, oauthSvc *OAuthService, tokenSvc *TokenService, userSvc *UserService, roleRepo repository.RoleRepository, localCredsRepo repository.LocalCredentialRepository) *AuthService {
+	return &AuthService{
+		cfg:            cfg,
+		oauthSvc:       oauthSvc,
+		tokenSvc:       tokenSvc,
+		userSvc:        userSvc,
+		roleRepo:       roleRepo,
+		localCredsRepo: localCredsRepo,
+	}
 }
 
 func (s *AuthService) GoogleLoginURL(state string) string {
+	if !s.cfg.AuthGoogleEnabled {
+		return ""
+	}
 	return s.oauthSvc.LoginURL(state)
 }
 
 func (s *AuthService) LoginWithGoogleCode(code, ua, ip string) (*LoginResult, error) {
+	if !s.cfg.AuthGoogleEnabled {
+		return nil, ErrGoogleAuthDisabled
+	}
 	user, err := s.oauthSvc.HandleGoogleCallback(context.Background(), code)
 	if err != nil {
 		return nil, err
@@ -52,6 +89,137 @@ func (s *AuthService) LoginWithGoogleCode(code, ua, ip string) (*LoginResult, er
 		return nil, err
 	}
 	return &LoginResult{User: user, AccessToken: access, RefreshToken: refresh, CSRFToken: csrf, ExpiresAt: time.Now().Add(s.cfg.JWTAccessTTL)}, nil
+}
+
+func (s *AuthService) RegisterLocal(email, name, password, ua, ip string) (*LoginResult, error) {
+	if !s.cfg.AuthLocalEnabled {
+		return nil, ErrLocalAuthDisabled
+	}
+	email = strings.TrimSpace(strings.ToLower(email))
+	name = strings.TrimSpace(name)
+	if err := validateEmail(email); err != nil {
+		return nil, err
+	}
+	if name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+	if err := validatePassword(password); err != nil {
+		return nil, err
+	}
+	if _, err := s.userSvc.userRepo.FindByEmail(email); err == nil {
+		return nil, fmt.Errorf("email already registered")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	user := &domain.User{Email: email, Name: name, Status: "active"}
+	if err := s.userSvc.userRepo.Create(user); err != nil {
+		return nil, err
+	}
+	userRole, err := s.roleRepo.FindByName("user")
+	if err == nil {
+		_ = s.userSvc.AddRole(user.ID, userRole.ID)
+	}
+
+	hash, err := security.HashPassword(password)
+	if err != nil {
+		return nil, err
+	}
+	verified := !s.cfg.AuthLocalRequireEmailVerification
+	credential := &domain.LocalCredential{
+		UserID:        user.ID,
+		PasswordHash:  hash,
+		EmailVerified: verified,
+	}
+	if verified {
+		now := time.Now().UTC()
+		credential.EmailVerifiedAt = &now
+	}
+	if err := s.localCredsRepo.Create(credential); err != nil {
+		return nil, err
+	}
+
+	if err := s.assignBootstrapAdminIfNeeded(user); err != nil {
+		return nil, err
+	}
+
+	freshUser, perms, err := s.userSvc.GetByID(user.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !verified {
+		return &LoginResult{
+			User:                 freshUser,
+			RequiresVerification: true,
+		}, nil
+	}
+
+	access, refresh, csrf, err := s.tokenSvc.Issue(freshUser, perms, ua, ip)
+	if err != nil {
+		return nil, err
+	}
+	return &LoginResult{User: freshUser, AccessToken: access, RefreshToken: refresh, CSRFToken: csrf, ExpiresAt: time.Now().Add(s.cfg.JWTAccessTTL)}, nil
+}
+
+func (s *AuthService) LoginWithLocalPassword(email, password, ua, ip string) (*LoginResult, error) {
+	if !s.cfg.AuthLocalEnabled {
+		return nil, ErrLocalAuthDisabled
+	}
+	email = strings.TrimSpace(strings.ToLower(email))
+	cred, err := s.localCredsRepo.FindByEmail(email)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+	ok, err := security.VerifyPassword(cred.PasswordHash, password)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrInvalidCredentials
+	}
+	if s.cfg.AuthLocalRequireEmailVerification && !cred.EmailVerified {
+		return nil, ErrLocalEmailUnverified
+	}
+	user, perms, err := s.userSvc.GetByID(cred.UserID)
+	if err != nil {
+		return nil, err
+	}
+	access, refresh, csrf, err := s.tokenSvc.Issue(user, perms, ua, ip)
+	if err != nil {
+		return nil, err
+	}
+	return &LoginResult{User: user, AccessToken: access, RefreshToken: refresh, CSRFToken: csrf, ExpiresAt: time.Now().Add(s.cfg.JWTAccessTTL)}, nil
+}
+
+func (s *AuthService) ChangeLocalPassword(userID uint, currentPassword, newPassword string) error {
+	if !s.cfg.AuthLocalEnabled {
+		return ErrLocalAuthDisabled
+	}
+	if err := validatePassword(newPassword); err != nil {
+		return err
+	}
+	cred, err := s.localCredsRepo.FindByUserID(userID)
+	if err != nil {
+		return ErrInvalidCredentials
+	}
+	ok, err := security.VerifyPassword(cred.PasswordHash, currentPassword)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrInvalidCredentials
+	}
+	if currentPassword == newPassword {
+		return fmt.Errorf("new password must differ from current password")
+	}
+	newHash, err := security.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	if err := s.localCredsRepo.UpdatePassword(userID, newHash); err != nil {
+		return err
+	}
+	return s.tokenSvc.RevokeAll(userID)
 }
 
 func (s *AuthService) Refresh(refreshToken, ua, ip string) (*LoginResult, error) {
@@ -85,9 +253,27 @@ func (s *AuthService) assignBootstrapAdminIfNeeded(user *domain.User) error {
 	if target == "" || strings.ToLower(user.Email) != target {
 		return nil
 	}
-	admin, err := s.oauthSvc.roleRepo.FindByName("admin")
+	admin, err := s.roleRepo.FindByName("admin")
 	if err != nil {
 		return err
 	}
 	return s.userSvc.AddRole(user.ID, admin.ID)
+}
+
+func validateEmail(email string) error {
+	if email == "" {
+		return fmt.Errorf("email is required")
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		return fmt.Errorf("invalid email")
+	}
+	return nil
+}
+
+func validatePassword(password string) error {
+	if len(password) < 12 || !uppercaseRe.MatchString(password) ||
+		!lowercaseRe.MatchString(password) || !digitRe.MatchString(password) || !specialRe.MatchString(password) {
+		return ErrWeakPassword
+	}
+	return nil
 }

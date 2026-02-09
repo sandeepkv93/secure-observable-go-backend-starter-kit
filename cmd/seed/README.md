@@ -5,6 +5,7 @@ Seed/bootstrap data CLI for RBAC defaults and optional admin bootstrap.
 ## Subcommands
 - `apply`: writes default permissions/roles and optional admin role assignment
 - `dry-run`: prints what would be seeded
+- `verify-local-email`: marks a local auth credential as verified (for local/dev verification-required mode)
 
 ## Examples
 
@@ -12,6 +13,7 @@ Seed/bootstrap data CLI for RBAC defaults and optional admin bootstrap.
 go run ./cmd/seed apply
 go run ./cmd/seed dry-run --ci
 go run ./cmd/seed apply --bootstrap-admin-email=admin@example.com --ci
+go run ./cmd/seed verify-local-email --email=user@example.com --ci
 ```
 
 ## Flags
@@ -31,4 +33,4 @@ go run ./cmd/seed apply --bootstrap-admin-email=admin@example.com --ci
 
 ## Related
 - Seed implementation: `internal/database/seed.go`
-- Task aliases: `task seed`, `task seed:dry-run`
+- Task aliases: `task seed`, `task seed:dry-run`, `task seed:verify-local-email`
