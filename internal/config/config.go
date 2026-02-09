@@ -35,6 +35,9 @@ type Config struct {
 	AuthLocalRequireEmailVerification bool
 	AuthEmailVerifyTokenTTL           time.Duration
 	AuthEmailVerifyBaseURL            string
+	AuthPasswordResetTokenTTL         time.Duration
+	AuthPasswordResetBaseURL          string
+	AuthPasswordForgotRateLimitPerMin int
 	BootstrapAdminEmail               string
 
 	AuthRateLimitPerMin          int
@@ -93,6 +96,8 @@ func Load() (*Config, error) {
 		AuthLocalEnabled:                  getEnvBool("AUTH_LOCAL_ENABLED", true),
 		AuthLocalRequireEmailVerification: getEnvBool("AUTH_LOCAL_REQUIRE_EMAIL_VERIFICATION", false),
 		AuthEmailVerifyBaseURL:            strings.TrimSpace(os.Getenv("AUTH_EMAIL_VERIFY_BASE_URL")),
+		AuthPasswordResetBaseURL:          strings.TrimSpace(os.Getenv("AUTH_PASSWORD_RESET_BASE_URL")),
+		AuthPasswordForgotRateLimitPerMin: getEnvInt("AUTH_PASSWORD_FORGOT_RATE_LIMIT_PER_MIN", 5),
 		BootstrapAdminEmail:               strings.TrimSpace(strings.ToLower(os.Getenv("BOOTSTRAP_ADMIN_EMAIL"))),
 		AuthRateLimitPerMin:               getEnvInt("AUTH_RATE_LIMIT_PER_MIN", 30),
 		APIRateLimitPerMin:                getEnvInt("API_RATE_LIMIT_PER_MIN", 120),
@@ -130,6 +135,12 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("parse AUTH_EMAIL_VERIFY_TOKEN_TTL: %w", err)
 	}
 	cfg.AuthEmailVerifyTokenTTL = verifyTTL
+
+	resetTTL, err := time.ParseDuration(getEnv("AUTH_PASSWORD_RESET_TOKEN_TTL", "15m"))
+	if err != nil {
+		return nil, fmt.Errorf("parse AUTH_PASSWORD_RESET_TOKEN_TTL: %w", err)
+	}
+	cfg.AuthPasswordResetTokenTTL = resetTTL
 
 	metricsInterval, err := time.ParseDuration(getEnv("OTEL_METRICS_EXPORT_INTERVAL", "10s"))
 	if err != nil {
@@ -207,6 +218,12 @@ func (c *Config) Validate() error {
 	}
 	if c.AuthEmailVerifyTokenTTL <= 0 || c.AuthEmailVerifyTokenTTL > (24*time.Hour) {
 		errs = append(errs, "AUTH_EMAIL_VERIFY_TOKEN_TTL must be between 1s and 24h")
+	}
+	if c.AuthPasswordResetTokenTTL <= 0 || c.AuthPasswordResetTokenTTL > (24*time.Hour) {
+		errs = append(errs, "AUTH_PASSWORD_RESET_TOKEN_TTL must be between 1s and 24h")
+	}
+	if c.AuthPasswordForgotRateLimitPerMin <= 0 {
+		errs = append(errs, "AUTH_PASSWORD_FORGOT_RATE_LIMIT_PER_MIN must be > 0")
 	}
 	if c.JWTAccessTTL <= 0 || c.JWTAccessTTL > time.Hour {
 		errs = append(errs, "JWT_ACCESS_TTL must be between 1s and 1h")

@@ -37,6 +37,10 @@ tasks:
     cmds:
       - go test ./test/integration -run TestEmailVerification -v
 
+  test:password-reset:
+    cmds:
+      - go test ./test/integration -run TestPasswordReset -v
+
   lint:
     deps: [lint:tools]
     cmds:

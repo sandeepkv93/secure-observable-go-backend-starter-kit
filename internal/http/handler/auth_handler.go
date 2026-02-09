@@ -320,6 +320,71 @@ func (h *AuthHandler) LocalVerifyConfirm(w http.ResponseWriter, r *http.Request)
 	response.JSON(w, r, http.StatusOK, map[string]string{"status": "email_verified"})
 }
 
+func (h *AuthHandler) LocalPasswordForgot(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	status := "success"
+	defer func() {
+		observability.RecordAuthRequestDuration(r.Context(), "local_password_forgot", status, time.Since(start))
+	}()
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		status = "failure"
+		observability.Audit(r, "auth.local.password.forgot.failed", "reason", "invalid_payload")
+		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
+		return
+	}
+	if err := h.authSvc.ForgotLocalPassword(req.Email); err != nil {
+		status = "failure"
+		observability.Audit(r, "auth.local.password.forgot.failed", "reason", "service_error", "error", err.Error())
+		switch {
+		case errors.Is(err, service.ErrLocalAuthDisabled):
+			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "local auth is disabled", nil)
+		default:
+			response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "password reset request failed", nil)
+		}
+		return
+	}
+	observability.Audit(r, "auth.local.password.forgot.requested")
+	response.JSON(w, r, http.StatusOK, map[string]string{"status": "if the account exists, reset instructions were sent"})
+}
+
+func (h *AuthHandler) LocalPasswordReset(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	status := "success"
+	defer func() {
+		observability.RecordAuthRequestDuration(r.Context(), "local_password_reset", status, time.Since(start))
+	}()
+	var req struct {
+		Token       string `json:"token"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		status = "failure"
+		observability.Audit(r, "auth.local.password.reset.failed", "reason", "invalid_payload")
+		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
+		return
+	}
+	if err := h.authSvc.ResetLocalPassword(req.Token, req.NewPassword); err != nil {
+		status = "failure"
+		observability.Audit(r, "auth.local.password.reset.failed", "reason", "service_error", "error", err.Error())
+		switch {
+		case errors.Is(err, service.ErrLocalAuthDisabled):
+			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "local auth is disabled", nil)
+		case errors.Is(err, service.ErrWeakPassword):
+			response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "password must be 12+ chars and include upper, lower, number, and special char", nil)
+		case errors.Is(err, service.ErrInvalidVerifyToken):
+			response.Error(w, r, http.StatusBadRequest, "INVALID_OR_EXPIRED_TOKEN", "invalid or expired token", nil)
+		default:
+			response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "password reset failed", nil)
+		}
+		return
+	}
+	observability.Audit(r, "auth.local.password.reset.success")
+	response.JSON(w, r, http.StatusOK, map[string]string{"status": "password_reset"})
+}
+
 func (h *AuthHandler) LocalChangePassword(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	status := "success"

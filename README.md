@@ -210,6 +210,7 @@ Your command surface stays simple, for example:
 - `task test:auth-lifecycle`
 - `task test:session-management`
 - `task test:email-verification`
+- `task test:password-reset`
 - `task security`
 
 ## Auth Lifecycle Integration Tests
@@ -227,6 +228,10 @@ Run only session management tests:
 Run only email verification tests:
 
 - `task test:email-verification`
+
+Run only password reset tests:
+
+- `task test:password-reset`
 
 Run all tests:
 
@@ -269,6 +274,9 @@ Configuration is loaded and validated in `internal/config/config.go`.
 - `AUTH_LOCAL_REQUIRE_EMAIL_VERIFICATION` (default `false`)
 - `AUTH_EMAIL_VERIFY_TOKEN_TTL` (default `30m`)
 - `AUTH_EMAIL_VERIFY_BASE_URL` (optional frontend verify URL)
+- `AUTH_PASSWORD_RESET_TOKEN_TTL` (default `15m`)
+- `AUTH_PASSWORD_RESET_BASE_URL` (optional frontend reset URL)
+- `AUTH_PASSWORD_FORGOT_RATE_LIMIT_PER_MIN` (default `5`)
 - `BOOTSTRAP_ADMIN_EMAIL`
 - `AUTH_RATE_LIMIT_PER_MIN` (default `30`)
 - `API_RATE_LIMIT_PER_MIN` (default `120`)
@@ -335,6 +343,8 @@ Auth:
 - `POST /api/v1/auth/local/login`
 - `POST /api/v1/auth/local/verify/request`
 - `POST /api/v1/auth/local/verify/confirm`
+- `POST /api/v1/auth/local/password/forgot`
+- `POST /api/v1/auth/local/password/reset`
 - `POST /api/v1/auth/local/change-password` (auth + CSRF required)
 - `POST /api/v1/auth/refresh` (CSRF required)
 - `POST /api/v1/auth/logout` (auth + CSRF required)

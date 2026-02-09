@@ -17,18 +17,19 @@ import (
 )
 
 type Dependencies struct {
-	AuthHandler       *handler.AuthHandler
-	UserHandler       *handler.UserHandler
-	AdminHandler      *handler.AdminHandler
-	JWTManager        *security.JWTManager
-	RBACService       service.RBACAuthorizer
-	CORSOrigins       []string
-	AuthRateLimitRPM  int
-	APIRateLimitRPM   int
-	GlobalRateLimiter GlobalRateLimiterFunc
-	AuthRateLimiter   AuthRateLimiterFunc
-	Readiness         *health.ProbeRunner
-	EnableOTelHTTP    bool
+	AuthHandler                *handler.AuthHandler
+	UserHandler                *handler.UserHandler
+	AdminHandler               *handler.AdminHandler
+	JWTManager                 *security.JWTManager
+	RBACService                service.RBACAuthorizer
+	CORSOrigins                []string
+	AuthRateLimitRPM           int
+	PasswordForgotRateLimitRPM int
+	APIRateLimitRPM            int
+	GlobalRateLimiter          GlobalRateLimiterFunc
+	AuthRateLimiter            AuthRateLimiterFunc
+	Readiness                  *health.ProbeRunner
+	EnableOTelHTTP             bool
 }
 
 type GlobalRateLimiterFunc func(http.Handler) http.Handler
@@ -53,6 +54,7 @@ func NewRouter(dep Dependencies) http.Handler {
 	if authLimiter == nil {
 		authLimiter = middleware.NewRateLimiter(dep.AuthRateLimitRPM, time.Minute).Middleware()
 	}
+	forgotLimiter := middleware.NewRateLimiter(dep.PasswordForgotRateLimitRPM, time.Minute).Middleware()
 
 	r.Get("/health/live", func(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
@@ -78,6 +80,8 @@ func NewRouter(dep Dependencies) http.Handler {
 			r.With(authLimiter).Post("/local/login", dep.AuthHandler.LocalLogin)
 			r.With(authLimiter).Post("/local/verify/request", dep.AuthHandler.LocalVerifyRequest)
 			r.With(authLimiter).Post("/local/verify/confirm", dep.AuthHandler.LocalVerifyConfirm)
+			r.With(forgotLimiter).Post("/local/password/forgot", dep.AuthHandler.LocalPasswordForgot)
+			r.With(authLimiter).Post("/local/password/reset", dep.AuthHandler.LocalPasswordReset)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.CSRFMiddleware)
 				r.With(authLimiter).Post("/refresh", dep.AuthHandler.Refresh)

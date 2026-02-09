@@ -44,7 +44,7 @@ func InitializeApp() (*app.App, error) {
 	localCredentialRepository := repository.NewLocalCredentialRepository(db)
 	verificationTokenRepository := repository.NewVerificationTokenRepository(db)
 	devEmailVerificationNotifier := service.NewDevEmailVerificationNotifier(logger)
-	authService := service.NewAuthService(configConfig, oAuthService, tokenService, userService, roleRepository, localCredentialRepository, verificationTokenRepository, devEmailVerificationNotifier)
+	authService := service.NewAuthService(configConfig, oAuthService, tokenService, userService, roleRepository, localCredentialRepository, verificationTokenRepository, devEmailVerificationNotifier, devEmailVerificationNotifier)
 	cookieManager := provideCookieManager(configConfig)
 	authHandler := provideAuthHandler(authService, cookieManager, configConfig)
 	sessionService := provideSessionService(configConfig, sessionRepository)

@@ -13,7 +13,8 @@ func TestEmailVerificationRegisterRequestConfirmAndLogin(t *testing.T) {
 		cfgOverride: func(cfg *config.Config) {
 			cfg.AuthLocalRequireEmailVerification = true
 		},
-		notifier: notifier,
+		verifyNotifier: notifier,
+		resetNotifier:  notifier,
 	})
 	defer closeFn()
 
@@ -73,7 +74,8 @@ func TestEmailVerificationExpiredTokenFails(t *testing.T) {
 			cfg.AuthLocalRequireEmailVerification = true
 			cfg.AuthEmailVerifyTokenTTL = -1
 		},
-		notifier: notifier,
+		verifyNotifier: notifier,
+		resetNotifier:  notifier,
 	})
 	defer closeFn()
 
@@ -109,7 +111,8 @@ func TestEmailVerificationReuseAndInvalidTokenFailUniformly(t *testing.T) {
 		cfgOverride: func(cfg *config.Config) {
 			cfg.AuthLocalRequireEmailVerification = true
 		},
-		notifier: notifier,
+		verifyNotifier: notifier,
+		resetNotifier:  notifier,
 	})
 	defer closeFn()
 

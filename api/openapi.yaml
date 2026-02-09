@@ -576,6 +576,57 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
 
+  /auth/local/password/forgot:
+    post:
+      tags: [Auth]
+      summary: Request local password reset token
+      operationId: authLocalPasswordForgot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: Request accepted with generic response
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /auth/local/password/reset:
+    post:
+      tags: [Auth]
+      summary: Reset local password using one-time token
+      operationId: authLocalPasswordReset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token: { type: string }
+                new_password: { type: string, format: password, minLength: 12 }
+      responses:
+        '200':
+          description: Password reset success
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
   /auth/local/change-password:
     post:
       tags: [Auth]

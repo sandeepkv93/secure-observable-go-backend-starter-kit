@@ -51,6 +51,7 @@ type apiEnvelope struct {
 type verificationCaptureNotifier struct {
 	mu    sync.Mutex
 	token string
+	reset string
 }
 
 func (n *verificationCaptureNotifier) SendEmailVerification(_ context.Context, notification service.VerificationNotification) error {
@@ -66,9 +67,23 @@ func (n *verificationCaptureNotifier) LastToken() string {
 	return n.token
 }
 
+func (n *verificationCaptureNotifier) SendPasswordReset(_ context.Context, notification service.PasswordResetNotification) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.reset = notification.Token
+	return nil
+}
+
+func (n *verificationCaptureNotifier) LastResetToken() string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.reset
+}
+
 type authTestServerOptions struct {
-	cfgOverride func(cfg *config.Config)
-	notifier    service.EmailVerificationNotifier
+	cfgOverride    func(cfg *config.Config)
+	verifyNotifier service.EmailVerificationNotifier
+	resetNotifier  service.PasswordResetNotifier
 }
 
 func TestAuthLifecycleLoginRefreshLogoutRevoked(t *testing.T) {
@@ -250,6 +265,9 @@ func newAuthTestServerWithOptions(t *testing.T, opts authTestServerOptions) (str
 		AuthLocalRequireEmailVerification: false,
 		AuthEmailVerifyTokenTTL:           30 * time.Minute,
 		AuthEmailVerifyBaseURL:            "http://localhost:3000/verify-email",
+		AuthPasswordResetTokenTTL:         15 * time.Minute,
+		AuthPasswordResetBaseURL:          "http://localhost:3000/reset-password",
+		AuthPasswordForgotRateLimitPerMin: 5,
 		BootstrapAdminEmail:               "",
 		JWTAccessTTL:                      15 * time.Minute,
 		JWTRefreshTTL:                     24 * time.Hour,
@@ -276,12 +294,19 @@ func newAuthTestServerWithOptions(t *testing.T, opts authTestServerOptions) (str
 	tokenSvc := service.NewTokenService(jwtMgr, sessionRepo, "pepper-1234567890", 15*time.Minute, 24*time.Hour)
 	sessionSvc := service.NewSessionService(sessionRepo, "pepper-1234567890")
 	oauthSvc := service.NewOAuthService(oauthProviderStub{}, userRepo, oauthRepo, roleRepo)
-	notifier := opts.notifier
-	if notifier == nil {
-		notifier = service.NewDevEmailVerificationNotifier(slog.New(slog.NewTextHandler(os.Stdout, nil)))
+	verifyNotifier := opts.verifyNotifier
+	resetNotifier := opts.resetNotifier
+	if verifyNotifier == nil || resetNotifier == nil {
+		dev := service.NewDevEmailVerificationNotifier(slog.New(slog.NewTextHandler(os.Stdout, nil)))
+		if verifyNotifier == nil {
+			verifyNotifier = dev
+		}
+		if resetNotifier == nil {
+			resetNotifier = dev
+		}
 	}
 	verificationTokenRepo := repository.NewVerificationTokenRepository(db)
-	authSvc := service.NewAuthService(cfg, oauthSvc, tokenSvc, userSvc, roleRepo, localCredRepo, verificationTokenRepo, notifier)
+	authSvc := service.NewAuthService(cfg, oauthSvc, tokenSvc, userSvc, roleRepo, localCredRepo, verificationTokenRepo, verifyNotifier, resetNotifier)
 	cookieMgr := security.NewCookieManager("", false, "lax")
 
 	authHandler := handler.NewAuthHandler(authSvc, cookieMgr, "0123456789abcdef0123456789abcdef", cfg.JWTRefreshTTL)
@@ -289,15 +314,16 @@ func newAuthTestServerWithOptions(t *testing.T, opts authTestServerOptions) (str
 	adminHandler := handler.NewAdminHandler(userSvc, roleRepo, permRepo)
 
 	r := router.NewRouter(router.Dependencies{
-		AuthHandler:      authHandler,
-		UserHandler:      userHandler,
-		AdminHandler:     adminHandler,
-		JWTManager:       jwtMgr,
-		RBACService:      rbac,
-		CORSOrigins:      []string{"http://localhost"},
-		AuthRateLimitRPM: 1000,
-		APIRateLimitRPM:  1000,
-		EnableOTelHTTP:   false,
+		AuthHandler:                authHandler,
+		UserHandler:                userHandler,
+		AdminHandler:               adminHandler,
+		JWTManager:                 jwtMgr,
+		RBACService:                rbac,
+		CORSOrigins:                []string{"http://localhost"},
+		AuthRateLimitRPM:           1000,
+		PasswordForgotRateLimitRPM: 1000,
+		APIRateLimitRPM:            1000,
+		EnableOTelHTTP:             false,
 	})
 
 	srv := httptest.NewServer(r)

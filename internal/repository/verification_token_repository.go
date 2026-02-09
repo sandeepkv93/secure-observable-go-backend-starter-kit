@@ -14,7 +14,7 @@ type VerificationTokenRepository interface {
 	Create(token *domain.VerificationToken) error
 	InvalidateActiveByUserPurpose(userID uint, purpose string, now time.Time) error
 	FindActiveByHashPurpose(hash, purpose string, now time.Time) (*domain.VerificationToken, error)
-	ConsumeAndMarkEmailVerified(tokenID, userID uint, now time.Time) error
+	Consume(tokenID, userID uint, now time.Time) error
 }
 
 type GormVerificationTokenRepository struct {
@@ -48,27 +48,15 @@ func (r *GormVerificationTokenRepository) FindActiveByHashPurpose(hash, purpose 
 	return &token, nil
 }
 
-func (r *GormVerificationTokenRepository) ConsumeAndMarkEmailVerified(tokenID, userID uint, now time.Time) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		res := tx.Model(&domain.VerificationToken{}).
-			Where("id = ? AND user_id = ? AND used_at IS NULL", tokenID, userID).
-			Updates(map[string]any{"used_at": now, "updated_at": now})
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return ErrVerificationTokenNotFound
-		}
-
-		credRes := tx.Model(&domain.LocalCredential{}).
-			Where("user_id = ?", userID).
-			Updates(map[string]any{"email_verified": true, "email_verified_at": now, "updated_at": now})
-		if credRes.Error != nil {
-			return credRes.Error
-		}
-		if credRes.RowsAffected == 0 {
-			return gorm.ErrRecordNotFound
-		}
-		return nil
-	})
+func (r *GormVerificationTokenRepository) Consume(tokenID, userID uint, now time.Time) error {
+	res := r.db.Model(&domain.VerificationToken{}).
+		Where("id = ? AND user_id = ? AND used_at IS NULL", tokenID, userID).
+		Updates(map[string]any{"used_at": now, "updated_at": now})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrVerificationTokenNotFound
+	}
+	return nil
 }

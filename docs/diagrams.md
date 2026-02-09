@@ -95,6 +95,31 @@ sequenceDiagram
 
 Source: `docs/diagrams/email-verification-flow.mmd`
 
+## Local Password Reset Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User Browser
+    participant API as API Server
+    participant DB as PostgreSQL
+    participant N as Dev Notifier
+
+    U->>API: POST /api/v1/auth/local/password/forgot (email)
+    API->>DB: Resolve user (if exists) without disclosure
+    API->>DB: Invalidate active password_reset tokens
+    API->>DB: Store hashed one-time token (short TTL)
+    API->>N: Send reset link/token
+    API-->>U: Generic 200 response
+
+    U->>API: POST /api/v1/auth/local/password/reset (token,new_password)
+    API->>DB: Validate active token + consume
+    API->>DB: Update password hash
+    API->>DB: Revoke all sessions
+    API-->>U: Password reset success
+```
+
+Source: `docs/diagrams/password-reset-flow.mmd`
+
 ## Observability Data Flow
 
 ```mermaid

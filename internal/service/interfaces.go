@@ -14,6 +14,8 @@ type AuthServiceInterface interface {
 	LoginWithLocalPassword(email, password, ua, ip string) (*LoginResult, error)
 	RequestLocalEmailVerification(email string) error
 	ConfirmLocalEmailVerification(token string) error
+	ForgotLocalPassword(email string) error
+	ResetLocalPassword(token, newPassword string) error
 	ChangeLocalPassword(userID uint, currentPassword, newPassword string) error
 	Refresh(refreshToken, ua, ip string) (*LoginResult, error)
 	Logout(userID uint) error

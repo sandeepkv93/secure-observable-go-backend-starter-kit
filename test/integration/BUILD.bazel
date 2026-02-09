@@ -6,6 +6,7 @@ go_test(
         "auth_lifecycle_test.go",
         "auth_middleware_test.go",
         "email_verification_test.go",
+        "password_reset_test.go",
         "rate_limit_test.go",
         "rbac_forbidden_test.go",
         "session_management_test.go",

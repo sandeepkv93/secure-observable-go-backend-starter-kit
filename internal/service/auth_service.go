@@ -30,6 +30,7 @@ type AuthService struct {
 	localCredsRepo        repository.LocalCredentialRepository
 	verificationTokenRepo repository.VerificationTokenRepository
 	verificationNotifier  EmailVerificationNotifier
+	passwordResetNotifier PasswordResetNotifier
 }
 
 type LoginResult struct {
@@ -66,6 +67,7 @@ func NewAuthService(
 	localCredsRepo repository.LocalCredentialRepository,
 	verificationTokenRepo repository.VerificationTokenRepository,
 	verificationNotifier EmailVerificationNotifier,
+	passwordResetNotifier PasswordResetNotifier,
 ) *AuthService {
 	return &AuthService{
 		cfg:                   cfg,
@@ -76,6 +78,7 @@ func NewAuthService(
 		localCredsRepo:        localCredsRepo,
 		verificationTokenRepo: verificationTokenRepo,
 		verificationNotifier:  verificationNotifier,
+		passwordResetNotifier: passwordResetNotifier,
 	}
 }
 
@@ -285,13 +288,108 @@ func (s *AuthService) ConfirmLocalEmailVerification(token string) error {
 		}
 		return err
 	}
-	if err := s.verificationTokenRepo.ConsumeAndMarkEmailVerified(record.ID, record.UserID, now); err != nil {
+	if err := s.verificationTokenRepo.Consume(record.ID, record.UserID, now); err != nil {
 		if errors.Is(err, repository.ErrVerificationTokenNotFound) {
 			return ErrInvalidVerifyToken
 		}
 		return err
 	}
+	if err := s.localCredsRepo.MarkEmailVerified(record.UserID); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (s *AuthService) ForgotLocalPassword(email string) error {
+	if !s.cfg.AuthLocalEnabled {
+		return ErrLocalAuthDisabled
+	}
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" {
+		return nil
+	}
+	cred, err := s.localCredsRepo.FindByEmail(email)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+
+	now := time.Now().UTC()
+	if err := s.verificationTokenRepo.InvalidateActiveByUserPurpose(cred.UserID, "password_reset", now); err != nil {
+		return err
+	}
+
+	rawToken, err := security.NewRandomString(32)
+	if err != nil {
+		return err
+	}
+	expiresAt := now.Add(s.cfg.AuthPasswordResetTokenTTL)
+	if err := s.verificationTokenRepo.Create(&domain.VerificationToken{
+		UserID:    cred.UserID,
+		TokenHash: hashVerificationToken(rawToken),
+		Purpose:   "password_reset",
+		ExpiresAt: expiresAt,
+	}); err != nil {
+		return err
+	}
+
+	resetURL := ""
+	if strings.TrimSpace(s.cfg.AuthPasswordResetBaseURL) != "" {
+		u, err := url.Parse(s.cfg.AuthPasswordResetBaseURL)
+		if err != nil {
+			return fmt.Errorf("invalid AUTH_PASSWORD_RESET_BASE_URL: %w", err)
+		}
+		q := u.Query()
+		q.Set("token", rawToken)
+		u.RawQuery = q.Encode()
+		resetURL = u.String()
+	}
+
+	return s.passwordResetNotifier.SendPasswordReset(context.Background(), PasswordResetNotification{
+		UserID:      cred.UserID,
+		Email:       email,
+		Token:       rawToken,
+		ExpiresAt:   expiresAt,
+		PasswordURL: resetURL,
+	})
+}
+
+func (s *AuthService) ResetLocalPassword(token, newPassword string) error {
+	if !s.cfg.AuthLocalEnabled {
+		return ErrLocalAuthDisabled
+	}
+	if err := validatePassword(newPassword); err != nil {
+		return err
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ErrInvalidVerifyToken
+	}
+	now := time.Now().UTC()
+	record, err := s.verificationTokenRepo.FindActiveByHashPurpose(hashVerificationToken(token), "password_reset", now)
+	if err != nil {
+		if errors.Is(err, repository.ErrVerificationTokenNotFound) {
+			return ErrInvalidVerifyToken
+		}
+		return err
+	}
+	if err := s.verificationTokenRepo.Consume(record.ID, record.UserID, now); err != nil {
+		if errors.Is(err, repository.ErrVerificationTokenNotFound) {
+			return ErrInvalidVerifyToken
+		}
+		return err
+	}
+
+	newHash, err := security.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	if err := s.localCredsRepo.UpdatePassword(record.UserID, newHash); err != nil {
+		return err
+	}
+	return s.tokenSvc.RevokeAll(record.UserID, "password_reset")
 }
 
 func (s *AuthService) ChangeLocalPassword(userID uint, currentPassword, newPassword string) error {
