@@ -36,6 +36,18 @@ Policy and safety controls:
 - Protected entities via `RBAC_PROTECTED_ROLES` and `RBAC_PROTECTED_PERMISSIONS`.
 - Self-lockout prevention for role/permission mutation paths.
 
+## Admin List Query Endpoints
+- `GET /api/v1/admin/users` with query params:
+- `page,page_size,sort_by,sort_order,email,status,role`
+- `GET /api/v1/admin/roles` with query params:
+- `page,page_size,sort_by,sort_order,name`
+- `GET /api/v1/admin/permissions` with query params:
+- `page,page_size,sort_by,sort_order,resource,action`
+
+Paginated response shape:
+- `data.items`
+- `data.pagination { page, page_size, total, total_pages }`
+
 ## Expected Startup Output (example)
 
 ```text

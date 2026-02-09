@@ -145,6 +145,23 @@ sequenceDiagram
 
 Source: `docs/diagrams/rbac-admin-flow.mmd`
 
+## Admin List Pagination and Filtering Flow
+
+```mermaid
+sequenceDiagram
+    participant A as Admin Client
+    participant API as API Server
+    participant DB as PostgreSQL
+
+    A->>API: GET /api/v1/admin/users?page=1&page_size=20&sort_by=created_at&sort_order=desc
+    API->>API: Validate page/page_size/sort/filter params
+    API->>DB: Apply indexed filters + stable sort + offset/limit
+    DB-->>API: items + total count
+    API-->>A: {data:{items,pagination}}
+```
+
+Source: `docs/diagrams/admin-list-query-flow.mmd`
+
 ## Observability Data Flow
 
 ```mermaid
