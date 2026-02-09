@@ -1,0 +1,16 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "migrate",
+    srcs = ["command.go"],
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/tools/migrate",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/config",
+        "//internal/database",
+        "//internal/tools/common",
+        "//internal/tools/ui",
+        "@com_github_spf13_cobra//:cobra",
+        "@io_gorm_gorm//:gorm",
+    ],
+)

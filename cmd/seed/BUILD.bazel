@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "seed_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/cmd/seed",
+    visibility = ["//visibility:private"],
+    deps = ["//internal/tools/seed"],
+)
+
+go_binary(
+    name = "seed",
+    embed = [":seed_lib"],
+    visibility = ["//visibility:public"],
+)

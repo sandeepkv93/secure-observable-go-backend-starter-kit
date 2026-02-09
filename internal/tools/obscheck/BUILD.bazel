@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "obscheck",
+    srcs = ["command.go"],
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/tools/obscheck",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/tools/common",
+        "//internal/tools/loadgen",
+        "//internal/tools/ui",
+        "@com_github_spf13_cobra//:cobra",
+    ],
+)

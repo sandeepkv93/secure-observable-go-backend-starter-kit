@@ -43,7 +43,23 @@ tasks:
 
   migrate:
     cmds:
-      - go run ./cmd/api migrate
+      - go run ./cmd/migrate up
+
+  migrate:status:
+    cmds:
+      - go run ./cmd/migrate status
+
+  migrate:plan:
+    cmds:
+      - go run ./cmd/migrate plan
+
+  seed:
+    cmds:
+      - go run ./cmd/seed apply
+
+  seed:dry-run:
+    cmds:
+      - go run ./cmd/seed dry-run
 
   wire:
     cmds:
@@ -68,6 +84,13 @@ tasks:
     cmds:
       - go vet ./...
 
+  cli:smoke:
+    cmds:
+      - go run ./cmd/migrate --help >/dev/null
+      - go run ./cmd/seed --help >/dev/null
+      - go run ./cmd/loadgen --help >/dev/null
+      - go run ./cmd/obscheck --help >/dev/null
+
   ci:
     cmds:
       - task bazel:build
@@ -75,6 +98,7 @@ tasks:
       - task gazelle:check
       - task tidy-check
       - task wire-check
+      - task cli:smoke
 
   hooks-install:
     cmds:
@@ -96,58 +120,8 @@ tasks:
 
   obs-generate-traffic:
     cmds:
-      - |
-        bash -ec '
-          for i in $(seq 1 40); do
-            curl -s -o /dev/null "http://localhost:8080/api/v1/auth/google/login"
-          done
-          for i in $(seq 1 20); do
-            curl -s -o /dev/null "http://localhost:8080/api/v1/auth/google/callback?state=bad&code=x"
-          done
-          for i in $(seq 1 20); do
-            curl -s -o /dev/null -X POST "http://localhost:8080/api/v1/auth/refresh"
-          done
-        '
+      - go run ./cmd/loadgen run --duration 10s --profile mixed
 
   obs-validate:
     cmds:
-      - |
-        bash -ec '
-          : "${GRAFANA_USER:=admin}"
-          : "${GRAFANA_PASSWORD:=admin}"
-          task obs-generate-traffic
-          sleep 10
-
-          START=$(date -u -d "20 minutes ago" +%s)
-          END=$(date -u +%s)
-          curl -s -u "${GRAFANA_USER}:${GRAFANA_PASSWORD}" \
-            "http://localhost:3000/api/datasources/proxy/1/api/v1/query_exemplars?query=auth_request_duration_seconds_bucket&start=${START}&end=${END}" \
-            > /tmp/obs_exemplars.json
-
-          EXEMPLAR_COUNT=$(jq ".data | length" /tmp/obs_exemplars.json)
-          if [ "${EXEMPLAR_COUNT}" -eq 0 ]; then
-            echo "No exemplars found for auth_request_duration_seconds_bucket"
-            exit 1
-          fi
-
-          TRACE_ID=$(jq -r ".data[0].exemplars[0].labels.trace_id" /tmp/obs_exemplars.json)
-          [ -n "${TRACE_ID}" ] && [ "${TRACE_ID}" != "null" ]
-
-          curl -s -u "${GRAFANA_USER}:${GRAFANA_PASSWORD}" \
-            "http://localhost:3000/api/datasources/proxy/3/api/traces/${TRACE_ID}" \
-            > /tmp/obs_trace.json
-          jq ".batches | length" /tmp/obs_trace.json | grep -E "^[1-9][0-9]*$" >/dev/null
-
-          QUERY="{service_name=\"secure-observable-go-backend-starter-kit\"} |= \"trace_id=${TRACE_ID}\""
-          ENCODED_QUERY=$(printf "%s" "${QUERY}" | jq -sRr @uri)
-          NOW_NS=$(date +%s%N)
-          START_NS=$((NOW_NS - 30 * 60 * 1000000000))
-
-          curl -s -u "${GRAFANA_USER}:${GRAFANA_PASSWORD}" \
-            "http://localhost:3000/api/datasources/proxy/2/loki/api/v1/query_range?query=${ENCODED_QUERY}&start=${START_NS}&end=${NOW_NS}&limit=1&direction=backward" \
-            > /tmp/obs_logs.json
-          jq ".data.result | length" /tmp/obs_logs.json | grep -E "^[1-9][0-9]*$" >/dev/null
-
-          echo "Observability validation passed"
-          echo "Trace ID from exemplar: ${TRACE_ID}"
-        '
+      - go run ./cmd/obscheck run

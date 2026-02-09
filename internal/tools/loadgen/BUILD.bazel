@@ -1,0 +1,16 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "loadgen",
+    srcs = [
+        "command.go",
+        "run.go",
+    ],
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/tools/loadgen",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/tools/common",
+        "//internal/tools/ui",
+        "@com_github_spf13_cobra//:cobra",
+    ],
+)

@@ -12,16 +12,6 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "migrate" {
-		runner, err := di.InitializeMigrationRunner()
-		if err != nil {
-			log.Fatal(err)
-		}
-		if err := runner.Run(); err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
 	a, err := di.InitializeApp()
 	if err != nil {
 		log.Fatal(err)

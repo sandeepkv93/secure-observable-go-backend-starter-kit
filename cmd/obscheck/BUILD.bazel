@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "obscheck_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/cmd/obscheck",
+    visibility = ["//visibility:private"],
+    deps = ["//internal/tools/obscheck"],
+)
+
+go_binary(
+    name = "obscheck",
+    embed = [":obscheck_lib"],
+    visibility = ["//visibility:public"],
+)

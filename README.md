@@ -29,6 +29,16 @@ REST API service in Go with Google OAuth login, JWT auth, secure cookie sessions
 - `task run`
 - `task bazel:run`
 
+## Operational Commands
+- `go run ./cmd/migrate up|status|plan`
+- `go run ./cmd/seed apply|dry-run`
+- `go run ./cmd/loadgen run --profile mixed --duration 15s`
+- `go run ./cmd/obscheck run`
+
+Notes:
+- Commands are TUI-first by default (Bubble Tea + Lip Gloss).
+- Use `--ci` for deterministic non-interactive JSON output.
+
 ## Bazel
 - Build all targets:
   - `task bazel:build`
@@ -59,6 +69,7 @@ Notes:
 
 ## Test and Checks
 - `task ci` (recommended full local gate, Bazel-first)
+- `task cli:smoke` (build/execute CLI help paths)
 - `task tidy-check`
 - `task wire-check`
 - `task test`
