@@ -9,7 +9,7 @@ go_library(
         "request_logging_middleware.go",
         "security_middleware.go",
     ],
-    importpath = "go-oauth-rbac-service/internal/http/middleware",
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/middleware",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/http/response",

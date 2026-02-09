@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"testing"
 
-	"go-oauth-rbac-service/internal/config"
-	"go-oauth-rbac-service/internal/http/router"
-	"go-oauth-rbac-service/internal/observability"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/router"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/observability"
 )
 
 func TestProvideHTTPServer(t *testing.T) {

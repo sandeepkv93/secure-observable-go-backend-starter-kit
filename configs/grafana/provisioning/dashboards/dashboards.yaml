@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: go-oauth-rbac-service
+  - name: secure-observable-go-backend-starter-kit
     orgId: 1
-    folder: go-oauth-rbac-service
+    folder: secure-observable-go-backend-starter-kit
     type: file
     disableDeletion: false
     editable: true

@@ -3,7 +3,7 @@ load("@rules_go//go:def.bzl", "go_library")
 go_library(
     name = "app",
     srcs = ["app.go"],
-    importpath = "go-oauth-rbac-service/internal/app",
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/app",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/config",

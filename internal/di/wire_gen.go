@@ -7,12 +7,12 @@
 package di
 
 import (
-	"go-oauth-rbac-service/internal/app"
-	"go-oauth-rbac-service/internal/config"
-	"go-oauth-rbac-service/internal/http/handler"
-	"go-oauth-rbac-service/internal/http/router"
-	"go-oauth-rbac-service/internal/repository"
-	"go-oauth-rbac-service/internal/service"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/app"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/handler"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/router"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/repository"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/service"
 )
 
 // Injectors from wire.go:

@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	"go-oauth-rbac-service/internal/domain"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/domain"
 )
 
 func TestRBACPermissionEvaluation(t *testing.T) {

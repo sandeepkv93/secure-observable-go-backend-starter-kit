@@ -1,1 +1,1 @@
-workspace(name = "go_oauth_rbac_service")
+workspace(name = "secure_observable_go_backend_starter_kit")

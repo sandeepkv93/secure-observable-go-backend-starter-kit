@@ -7,7 +7,7 @@ go_library(
         "auth_handler.go",
         "user_handler.go",
     ],
-    importpath = "go-oauth-rbac-service/internal/http/handler",
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/handler",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/domain",

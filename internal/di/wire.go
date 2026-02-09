@@ -6,7 +6,7 @@ package di
 import (
 	"github.com/google/wire"
 
-	"go-oauth-rbac-service/internal/app"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/app"
 )
 
 func InitializeApp() (*app.App, error) {

@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"go-oauth-rbac-service/internal/http/middleware"
-	"go-oauth-rbac-service/internal/security"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/middleware"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/security"
 )
 
 func TestProtectedRouteRequiresToken(t *testing.T) {

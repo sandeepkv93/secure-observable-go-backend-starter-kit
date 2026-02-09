@@ -21,7 +21,7 @@
       },
       "targets": [
         {
-          "expr": "{service_name=\"go-oauth-rbac-service\"}",
+          "expr": "{service_name=\"secure-observable-go-backend-starter-kit\"}",
           "refId": "A"
         }
       ],

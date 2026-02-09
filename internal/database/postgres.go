@@ -1,7 +1,7 @@
 package database
 
 import (
-	"go-oauth-rbac-service/internal/config"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

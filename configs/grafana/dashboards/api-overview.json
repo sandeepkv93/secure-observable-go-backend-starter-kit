@@ -14,7 +14,7 @@
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
       "targets": [
         {
-          "expr": "sum(rate(http_server_request_duration_seconds_count{job=\"go-oauth-rbac-service\"}[5m])) by (http_response_status_code)",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{job=\"secure-observable-go-backend-starter-kit\"}[5m])) by (http_response_status_code)",
           "legendFormat": "{{http_response_status_code}}",
           "refId": "A"
         }
@@ -30,7 +30,7 @@
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{job=\"go-oauth-rbac-service\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{job=\"secure-observable-go-backend-starter-kit\"}[5m])) by (le))",
           "legendFormat": "p95",
           "refId": "A"
         }

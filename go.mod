@@ -1,4 +1,4 @@
-module go-oauth-rbac-service
+module github.com/sandeepkv93/secure-observable-go-backend-starter-kit
 
 go 1.24.11
 

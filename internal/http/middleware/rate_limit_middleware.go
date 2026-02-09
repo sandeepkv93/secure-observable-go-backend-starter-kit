@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"go-oauth-rbac-service/internal/http/response"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/response"
 )
 
 type fixedWindow struct {

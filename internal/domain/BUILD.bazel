@@ -9,6 +9,6 @@ go_library(
         "session.go",
         "user.go",
     ],
-    importpath = "go-oauth-rbac-service/internal/domain",
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/domain",
     visibility = ["//:__subpackages__"],
 )

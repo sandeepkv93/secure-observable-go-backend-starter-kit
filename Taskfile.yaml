@@ -138,7 +138,7 @@ tasks:
             > /tmp/obs_trace.json
           jq ".batches | length" /tmp/obs_trace.json | grep -E "^[1-9][0-9]*$" >/dev/null
 
-          QUERY="{service_name=\"go-oauth-rbac-service\"} |= \"trace_id=${TRACE_ID}\""
+          QUERY="{service_name=\"secure-observable-go-backend-starter-kit\"} |= \"trace_id=${TRACE_ID}\""
           ENCODED_QUERY=$(printf "%s" "${QUERY}" | jq -sRr @uri)
           NOW_NS=$(date +%s%N)
           START_NS=$((NOW_NS - 30 * 60 * 1000000000))

@@ -9,7 +9,7 @@ go_library(
         "session_repository.go",
         "user_repository.go",
     ],
-    importpath = "go-oauth-rbac-service/internal/repository",
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/repository",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/domain",

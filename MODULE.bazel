@@ -1,5 +1,5 @@
 module(
-    name = "go_oauth_rbac_service",
+    name = "secure_observable_go_backend_starter_kit",
     version = "0.1.0",
 )
 

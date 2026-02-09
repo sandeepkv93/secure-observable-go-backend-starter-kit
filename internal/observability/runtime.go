@@ -5,7 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
-	"go-oauth-rbac-service/internal/config"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
 
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"

@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"go-oauth-rbac-service/internal/config"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
 
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/otel/attribute"

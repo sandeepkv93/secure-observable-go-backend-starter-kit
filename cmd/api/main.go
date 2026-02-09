@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"go-oauth-rbac-service/internal/di"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/di"
 )
 
 func main() {

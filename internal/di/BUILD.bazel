@@ -6,7 +6,7 @@ go_library(
         "providers.go",
         "wire_gen.go",
     ],
-    importpath = "go-oauth-rbac-service/internal/di",
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/di",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/app",

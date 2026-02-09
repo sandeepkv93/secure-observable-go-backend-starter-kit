@@ -8,11 +8,11 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
-	"go-oauth-rbac-service/internal/http/handler"
-	"go-oauth-rbac-service/internal/http/middleware"
-	"go-oauth-rbac-service/internal/http/response"
-	"go-oauth-rbac-service/internal/security"
-	"go-oauth-rbac-service/internal/service"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/handler"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/middleware"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/response"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/security"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/service"
 )
 
 type Dependencies struct {

@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"go-oauth-rbac-service/internal/config"
-	"go-oauth-rbac-service/internal/observability"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/observability"
 )
 
 type App struct {

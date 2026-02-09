@@ -1,5 +1,5 @@
-# go-oauth-rbac-service
-[![CI](https://github.com/sandeepkv93/go-oauth-rbac-service/actions/workflows/ci.yml/badge.svg)](https://github.com/sandeepkv93/go-oauth-rbac-service/actions/workflows/ci.yml)
+# secure-observable-go-backend-starter-kit
+[![CI](https://github.com/sandeepkv93/secure-observable-go-backend-starter-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/sandeepkv93/secure-observable-go-backend-starter-kit/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/badge/Go-1.24.11-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 

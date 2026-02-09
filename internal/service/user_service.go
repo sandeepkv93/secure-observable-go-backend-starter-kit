@@ -1,8 +1,8 @@
 package service
 
 import (
-	"go-oauth-rbac-service/internal/domain"
-	"go-oauth-rbac-service/internal/repository"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/domain"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/repository"
 )
 
 type UserService struct {

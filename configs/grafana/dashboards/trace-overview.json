@@ -20,7 +20,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate({service_name=\"go-oauth-rbac-service\"} |= \"trace_id=\" [5m]))",
+          "expr": "sum(rate({service_name=\"secure-observable-go-backend-starter-kit\"} |= \"trace_id=\" [5m]))",
           "queryType": "range",
           "refId": "A"
         }
@@ -42,7 +42,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(auth_request_duration_seconds_bucket{job=\"go-oauth-rbac-service\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(auth_request_duration_seconds_bucket{job=\"secure-observable-go-backend-starter-kit\"}[5m])) by (le))",
           "legendFormat": "p95",
           "refId": "A"
         }
@@ -58,7 +58,7 @@
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
       "targets": [
         {
-          "expr": "sum by (event) (rate({service_name=\"go-oauth-rbac-service\"} |= \"trace_id=\" | json | event!=\"\" [5m]))",
+          "expr": "sum by (event) (rate({service_name=\"secure-observable-go-backend-starter-kit\"} |= \"trace_id=\" | json | event!=\"\" [5m]))",
           "legendFormat": "{{event}}",
           "queryType": "range",
           "refId": "A"
@@ -82,7 +82,7 @@
       },
       "targets": [
         {
-          "expr": "{service_name=\"go-oauth-rbac-service\"} |= \"trace_id=\"",
+          "expr": "{service_name=\"secure-observable-go-backend-starter-kit\"} |= \"trace_id=\"",
           "queryType": "range",
           "refId": "A"
         }

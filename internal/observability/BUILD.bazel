@@ -9,7 +9,7 @@ go_library(
         "runtime.go",
         "tracing.go",
     ],
-    importpath = "go-oauth-rbac-service/internal/observability",
+    importpath = "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/observability",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/config",

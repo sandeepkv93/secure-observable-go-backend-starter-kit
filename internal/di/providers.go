@@ -10,15 +10,15 @@ import (
 	"github.com/google/wire"
 	"gorm.io/gorm"
 
-	"go-oauth-rbac-service/internal/app"
-	"go-oauth-rbac-service/internal/config"
-	"go-oauth-rbac-service/internal/database"
-	"go-oauth-rbac-service/internal/http/handler"
-	"go-oauth-rbac-service/internal/http/router"
-	"go-oauth-rbac-service/internal/observability"
-	"go-oauth-rbac-service/internal/repository"
-	"go-oauth-rbac-service/internal/security"
-	"go-oauth-rbac-service/internal/service"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/app"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/database"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/handler"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/router"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/observability"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/repository"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/security"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/service"
 )
 
 var ConfigSet = wire.NewSet(config.Load)

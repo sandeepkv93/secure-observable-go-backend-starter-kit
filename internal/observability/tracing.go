@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"go-oauth-rbac-service/internal/config"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"

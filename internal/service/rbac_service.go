@@ -1,6 +1,6 @@
 package service
 
-import "go-oauth-rbac-service/internal/domain"
+import "github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/domain"
 
 type RBACService struct{}
 

@@ -32,4 +32,4 @@ datasources:
         spanEndTimeShift: 1h
         filterByTraceID: true
         customQuery: true
-        query: '{service_name="go-oauth-rbac-service"} |~ "(trace_id=|\"trace_id\":\")0*$${__trace.traceId}"'
+        query: '{service_name="secure-observable-go-backend-starter-kit"} |~ "(trace_id=|\"trace_id\":\")0*$${__trace.traceId}"'

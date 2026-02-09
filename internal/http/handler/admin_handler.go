@@ -8,11 +8,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"go-oauth-rbac-service/internal/domain"
-	"go-oauth-rbac-service/internal/http/response"
-	"go-oauth-rbac-service/internal/observability"
-	"go-oauth-rbac-service/internal/repository"
-	"go-oauth-rbac-service/internal/service"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/domain"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/response"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/observability"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/repository"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/service"
 )
 
 type AdminHandler struct {

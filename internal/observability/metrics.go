@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"go-oauth-rbac-service/internal/config"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -74,7 +74,7 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 	)
 	otel.SetMeterProvider(mp)
 
-	meter := mp.Meter("go-oauth-rbac-service")
+	meter := mp.Meter("secure-observable-go-backend-starter-kit")
 	loginCounter, err := meter.Int64Counter("auth.login.attempts")
 	if err != nil {
 		return nil, err

@@ -8,9 +8,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"go-oauth-rbac-service/internal/http/middleware"
-	"go-oauth-rbac-service/internal/security"
-	"go-oauth-rbac-service/internal/service"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/middleware"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/security"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/service"
 )
 
 func TestRBACForbiddenWithoutPermission(t *testing.T) {

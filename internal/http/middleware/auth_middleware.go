@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"go-oauth-rbac-service/internal/http/response"
-	"go-oauth-rbac-service/internal/security"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/response"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/security"
 )
 
 type contextKey string
