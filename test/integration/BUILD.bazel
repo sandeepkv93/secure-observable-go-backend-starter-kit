@@ -3,14 +3,24 @@ load("@rules_go//go:def.bzl", "go_test")
 go_test(
     name = "integration_test",
     srcs = [
+        "auth_lifecycle_test.go",
         "auth_middleware_test.go",
         "rate_limit_test.go",
         "rbac_forbidden_test.go",
     ],
     deps = [
+        "//internal/config",
+        "//internal/database",
+        "//internal/http/handler",
         "//internal/http/middleware",
+        "//internal/http/router",
+        "//internal/repository",
         "//internal/security",
         "//internal/service",
         "@com_github_go_chi_chi_v5//:chi",
+        "@io_gorm_driver_sqlite//:sqlite",
+        "@io_gorm_gorm//:gorm",
+        "@io_gorm_gorm//logger",
+        "@org_golang_x_oauth2//:oauth2",
     ],
 )

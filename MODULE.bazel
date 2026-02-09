@@ -21,6 +21,7 @@ use_repo(
     "com_github_google_wire",
     "com_github_spf13_cobra",
     "io_gorm_driver_postgres",
+    "io_gorm_driver_sqlite",
     "io_gorm_gorm",
     "io_opentelemetry_go_contrib_bridges_otelslog",
     "io_opentelemetry_go_contrib_instrumentation_net_http_otelhttp",
