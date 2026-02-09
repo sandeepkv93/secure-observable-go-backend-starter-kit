@@ -3,7 +3,6 @@ package loadgen
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"strings"
 	"sync"
@@ -59,7 +58,6 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 		wg.Add(1)
 		go func(worker int) {
 			defer wg.Done()
-			r := rand.New(rand.NewSource(cfg.Seed + int64(worker) + time.Now().UnixNano()))
 			for path := range jobs {
 				method := http.MethodGet
 				if strings.Contains(path, "/refresh") {
@@ -85,7 +83,6 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 				case resp.StatusCode >= 500:
 					atomic.AddInt64(&s5xx, 1)
 				}
-				_ = r.Intn(10)
 			}
 		}(i)
 	}

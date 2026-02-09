@@ -30,3 +30,48 @@ jobs:
         run: task tidy-check
       - name: Verify wire generation
         run: task wire-check
+      - name: Security gates
+        run: task security
+
+  migration-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: starterkit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d starterkit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/starterkit?sslmode=disable
+      JWT_ACCESS_SECRET: 12345678901234567890123456789012
+      JWT_REFRESH_SECRET: 12345678901234567890123456789013
+      REFRESH_TOKEN_PEPPER: 1234567890abcdef
+      OAUTH_STATE_SECRET: 1234567890abcdef
+      AUTH_GOOGLE_ENABLED: "false"
+      AUTH_LOCAL_ENABLED: "true"
+      RATE_LIMIT_REDIS_ENABLED: "false"
+      OTEL_METRICS_ENABLED: "false"
+      OTEL_TRACING_ENABLED: "false"
+      OTEL_LOGS_ENABLED: "false"
+      OTEL_LOG_LEVEL: info
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install Task
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Migration smoke tests
+        run: task migrate:smoke

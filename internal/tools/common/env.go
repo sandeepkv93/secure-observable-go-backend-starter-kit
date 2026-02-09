@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -13,7 +14,9 @@ func LoadEnvFile(path string) error {
 	if path == "" {
 		return nil
 	}
-	f, err := os.Open(path)
+	cleanPath := filepath.Clean(path)
+	// #nosec G304 -- env file path is an explicit CLI/operator input.
+	f, err := os.Open(cleanPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil

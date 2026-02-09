@@ -13,6 +13,9 @@ includes:
   obs:
     taskfile: ./taskfiles/obs.yaml
     flatten: true
+  security:
+    taskfile: ./taskfiles/security.yaml
+    flatten: true
   ci:
     taskfile: ./taskfiles/ci.yaml
     flatten: true

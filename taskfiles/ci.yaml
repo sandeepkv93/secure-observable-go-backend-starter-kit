@@ -8,4 +8,5 @@ tasks:
       - task gazelle:check
       - task tidy-check
       - task wire-check
+      - task security
       - task cli:smoke

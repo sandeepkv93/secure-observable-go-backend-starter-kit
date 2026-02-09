@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/router"
@@ -39,7 +40,7 @@ func TestProvideRouterDependencies(t *testing.T) {
 func TestProvideApp(t *testing.T) {
 	cfg := &config.Config{HTTPPort: "8080"}
 	logger := slog.Default()
-	srv := &http.Server{Addr: ":8080"}
+	srv := &http.Server{Addr: ":8080", ReadHeaderTimeout: time.Second}
 	runtime := &observability.Runtime{}
 
 	app := provideApp(cfg, logger, srv, runtime, nil, nil, nil)

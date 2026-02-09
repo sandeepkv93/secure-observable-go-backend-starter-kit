@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"math"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -35,7 +36,13 @@ func VerifyPassword(encoded, password string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	actual := argon2.IDKey([]byte(password), salt, timeCost, memory, threads, uint32(len(expected)))
+	expectedLen := len(expected)
+	if uint64(expectedLen) > uint64(math.MaxUint32) {
+		return false, fmt.Errorf("invalid hash length")
+	}
+	// #nosec G115 -- bounded by explicit MaxUint32 check above.
+	keyLen := uint32(expectedLen)
+	actual := argon2.IDKey([]byte(password), salt, timeCost, memory, threads, keyLen)
 	return subtle.ConstantTimeCompare(actual, expected) == 1, nil
 }
 

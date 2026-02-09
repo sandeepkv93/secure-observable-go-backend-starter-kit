@@ -1,7 +1,7 @@
 # Secure Observable Go Backend Starter Kit
 
 [![CI](https://github.com/sandeepkv93/secure-observable-go-backend-starter-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/sandeepkv93/secure-observable-go-backend-starter-kit/actions/workflows/ci.yml)
-[![Go Version](https://img.shields.io/badge/Go-1.24.11-00ADD8?style=flat&logo=go)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/Go-1.24.13-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Production-oriented Go backend starter with:
@@ -140,7 +140,7 @@ flowchart TD
 
 ## Prerequisites
 
-- Go `1.24.11`
+- Go `1.24.13`
 - [Task](https://taskfile.dev/)
 - [Bazelisk](https://github.com/bazelbuild/bazelisk)
 - Docker and Docker Compose (for local stack)
@@ -153,6 +153,7 @@ Root `Taskfile.yaml` includes modular files with `flatten: true`:
 - `taskfiles/bazel.yaml`
 - `taskfiles/go.yaml`
 - `taskfiles/obs.yaml`
+- `taskfiles/security.yaml`
 - `taskfiles/ci.yaml`
 
 Your command surface stays simple, for example:
@@ -161,8 +162,10 @@ Your command surface stays simple, for example:
 - `task ci`
 - `task bazel:build`
 - `task migrate`
+- `task migrate:smoke`
 - `task obs-validate`
 - `task test:auth-lifecycle`
+- `task security`
 
 ## Auth Lifecycle Integration Tests
 
@@ -330,6 +333,7 @@ App/runtime:
 
 - `task run`
 - `task migrate`
+- `task migrate:smoke`
 - `task migrate:status`
 - `task migrate:plan`
 - `task seed`
@@ -363,6 +367,7 @@ Observability:
 Quality gate:
 
 - `task ci`
+- `task security`
 
 ## Build and Test Strategy
 
@@ -384,7 +389,7 @@ Generation checks:
 
 Pinned versions:
 
-- Go toolchain pinned to `1.24.11` in `go.mod` and Bazel module setup.
+- Go toolchain pinned to `1.24.13` in `go.mod` and Bazel module setup.
 
 ## CI Pipeline
 
@@ -401,6 +406,8 @@ Pipeline steps:
 7. Run `task gazelle:check`
 8. Run `task tidy-check`
 9. Run `task wire-check`
+10. Run `task security`
+11. Run migration smoke job (`task migrate:smoke`) against CI Postgres service
 
 ## Git Hooks
 

@@ -17,6 +17,12 @@ tasks:
     cmds:
       - go run ./cmd/migrate plan
 
+  migrate:smoke:
+    cmds:
+      - go run ./cmd/migrate status --ci --env-file /dev/null
+      - go run ./cmd/migrate plan --ci --env-file /dev/null
+      - go run ./cmd/migrate up --ci --env-file /dev/null
+
   seed:
     cmds:
       - go run ./cmd/seed apply

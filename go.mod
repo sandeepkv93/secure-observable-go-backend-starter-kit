@@ -1,6 +1,6 @@
 module github.com/sandeepkv93/secure-observable-go-backend-starter-kit
 
-go 1.24.11
+go 1.24.13
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10

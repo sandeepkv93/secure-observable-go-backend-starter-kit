@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -76,6 +77,9 @@ func parseRedisInt64(v interface{}) (int64, error) {
 	case int64:
 		return n, nil
 	case uint64:
+		if n > math.MaxInt64 {
+			return 0, fmt.Errorf("redis response overflows int64")
+		}
 		return int64(n), nil
 	case int:
 		return int64(n), nil

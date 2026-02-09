@@ -16,5 +16,5 @@ if [[ -n "${staged_go_files}" ]]; then
 fi
 
 echo "pre-commit: syncing module files"
-GOTOOLCHAIN=go1.24.11 go mod tidy
+GOTOOLCHAIN=go1.24.13 go mod tidy
 git add go.mod go.sum
