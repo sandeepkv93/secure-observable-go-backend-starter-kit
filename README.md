@@ -268,141 +268,21 @@ OpenAPI spec:
 All tools use Cobra and default to TUI output via Bubble Tea/Lip Gloss.
 Use `--ci` for non-interactive JSON output.
 
-## `cmd/api`
+Detailed command docs now live next to each command:
+- API server: `cmd/api/README.md`
+- Migration CLI: `cmd/migrate/README.md`
+- Seed CLI: `cmd/seed/README.md`
+- Load generation CLI: `cmd/loadgen/README.md`
+- Observability validation CLI: `cmd/obscheck/README.md`
 
-Run the API server:
-
-- `go run ./cmd/api`
-
-Example:
+Quick examples:
 
 ```bash
 go run ./cmd/api
-```
-
-Expected output (example):
-
-```text
-{"level":"INFO","msg":"server starting","addr":":8080",...}
-```
-
-## `cmd/migrate`
-
-- `go run ./cmd/migrate up`
-- `go run ./cmd/migrate status`
-- `go run ./cmd/migrate plan`
-
-Key flags:
-
-- `--env-file` (default `.env`)
-- `--timeout` (default `30s`)
-- `--ci`
-
-Examples:
-
-```bash
 go run ./cmd/migrate status --ci
-go run ./cmd/migrate plan --ci
-go run ./cmd/migrate up --ci
-```
-
-Expected output (shape):
-
-```json
-{
-  "ok": true,
-  "title": "migrate status",
-  "details": ["database reachable", "service: secure-observable-go-backend-starter-kit", "migrations: ready"]
-}
-```
-
-## `cmd/seed`
-
-- `go run ./cmd/seed apply`
-- `go run ./cmd/seed dry-run`
-
-Key flags:
-
-- `--env-file` (default `.env`)
-- `--bootstrap-admin-email`
-- `--ci`
-
-Examples:
-
-```bash
 go run ./cmd/seed dry-run --ci
-go run ./cmd/seed apply --bootstrap-admin-email=admin@example.com --ci
-```
-
-Expected output (shape):
-
-```json
-{
-  "ok": true,
-  "title": "seed apply",
-  "details": ["seeded default roles and permissions", "bootstrap admin role assignment attempted for: admin@example.com"]
-}
-```
-
-## `cmd/loadgen`
-
-- `go run ./cmd/loadgen run`
-
-Key flags:
-
-- `--base-url` (default `http://localhost:8080`)
-- `--profile` (`auth`, `mixed`, `error-heavy`)
-- `--duration`
-- `--rps`
-- `--concurrency`
-- `--seed`
-- `--ci`
-
-Example:
-
-```bash
-go run ./cmd/loadgen run --profile mixed --duration 10s --rps 20 --concurrency 6 --ci
-```
-
-Expected output (shape):
-
-```json
-{
-  "ok": true,
-  "title": "loadgen run",
-  "details": ["total_requests=...", "failures=...", "status_2xx=...", "status_4xx=...", "status_5xx=..."]
-}
-```
-
-## `cmd/obscheck`
-
-- `go run ./cmd/obscheck run`
-
-Validates exemplar -> trace -> log path through Grafana datasources.
-
-Key flags:
-
-- `--grafana-url` (default `http://localhost:3000`)
-- `--grafana-user` / `--grafana-password`
-- `--service-name`
-- `--window`
-- `--base-url`
-- `--ci`
-
-Example:
-
-```bash
+go run ./cmd/loadgen run --profile mixed --duration 10s --ci
 go run ./cmd/obscheck run --ci
-```
-
-Expected output (shape):
-
-```json
-{
-  "ok": true,
-  "title": "obscheck run",
-  "details": ["traffic generated total=... failures=...", "exemplar trace_id=...", "tempo trace lookup: ok", "loki trace correlation: ok"]
-}
 ```
 
 ## Task Reference
