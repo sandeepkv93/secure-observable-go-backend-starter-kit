@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant C as Client
+    participant API as API Handler
+    participant RESP as response.Error
+
+    C->>API: Request that fails
+    API->>RESP: response.Error(status, code, message, details)
+    RESP->>RESP: Inspect Accept header
+
+    alt Accept includes application/problem+json
+        RESP-->>C: application/problem+json
+        Note over C,RESP: type,title,status,detail,instance,code,request_id
+    else Default / application/json
+        RESP-->>C: application/json envelope
+        Note over C,RESP: success:false,error:{code,message},meta:{request_id,timestamp}
+    end
+
