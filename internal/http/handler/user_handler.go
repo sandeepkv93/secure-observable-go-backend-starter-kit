@@ -59,7 +59,15 @@ func (h *UserHandler) Sessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	observability.Audit(r, "user.sessions.listed", "user_id", userID, "count", len(sessionViews), "current_session_id", currentSessionID)
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   "session.list",
+		ActorUserID: observability.ActorUserID(userID),
+		TargetType:  "session",
+		TargetID:    "self",
+		Action:      "list",
+		Outcome:     "success",
+		Reason:      "sessions_loaded",
+	}, "count", len(sessionViews), "current_session_id", currentSessionID)
 	response.JSON(w, r, http.StatusOK, sessionViews)
 }
 
@@ -88,7 +96,15 @@ func (h *UserHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	observability.Audit(r, "user.session.revoked", "user_id", userID, "session_id", sessionID, "status", status)
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   "session.revoke.single",
+		ActorUserID: observability.ActorUserID(userID),
+		TargetType:  "session",
+		TargetID:    strconv.FormatUint(uint64(sessionID), 10),
+		Action:      "revoke",
+		Outcome:     "success",
+		Reason:      status,
+	}, "status", status)
 	response.JSON(w, r, http.StatusOK, map[string]any{
 		"session_id": sessionID,
 		"status":     status,
@@ -114,7 +130,15 @@ func (h *UserHandler) RevokeOtherSessions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	observability.Audit(r, "user.sessions.revoked_others", "user_id", userID, "current_session_id", currentSessionID, "revoked_count", revokedCount)
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   "session.revoke.others",
+		ActorUserID: observability.ActorUserID(userID),
+		TargetType:  "session",
+		TargetID:    "others",
+		Action:      "revoke",
+		Outcome:     "success",
+		Reason:      "bulk_revoke",
+	}, "current_session_id", currentSessionID, "revoked_count", revokedCount)
 	response.JSON(w, r, http.StatusOK, map[string]any{
 		"current_session_id": currentSessionID,
 		"revoked_count":      revokedCount,

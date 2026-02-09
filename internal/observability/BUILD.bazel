@@ -1,4 +1,4 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "observability",
@@ -29,4 +29,10 @@ go_library(
         "@io_opentelemetry_go_otel_sdk_metric//exemplar",
         "@io_opentelemetry_go_otel_trace//:trace",
     ],
+)
+
+go_test(
+    name = "observability_test",
+    srcs = ["audit_test.go"],
+    embed = [":observability"],
 )

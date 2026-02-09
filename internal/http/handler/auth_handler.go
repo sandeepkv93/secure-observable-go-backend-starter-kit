@@ -35,7 +35,7 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	state, err := security.NewRandomString(24)
 	if err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.google.login.failed", "reason", "state_generation")
+		auditAuth(r, "auth.google.login", "oauth_login", "failure", "state_generation", "anonymous", "auth_provider", "google")
 		observability.RecordAuthLogin(r.Context(), "google", "failure")
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to generate oauth state", nil)
 		return
@@ -43,14 +43,14 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	loginURL := h.authSvc.GoogleLoginURL(state)
 	if loginURL == "" {
 		status = "failure"
-		observability.Audit(r, "auth.google.login.failed", "reason", "provider_disabled")
+		auditAuth(r, "auth.google.login", "oauth_login", "rejected", "provider_disabled", "anonymous", "auth_provider", "google")
 		observability.RecordAuthLogin(r.Context(), "google", "failure")
 		response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "google auth is disabled", nil)
 		return
 	}
 	signed := security.SignState(state, h.stateKey)
 	http.SetCookie(w, &http.Cookie{Name: "oauth_state", Value: signed, Path: "/api/v1/auth/google", HttpOnly: true, Secure: h.cookieMgr.Secure, SameSite: h.cookieMgr.SameSite, Domain: h.cookieMgr.Domain, MaxAge: 300})
-	observability.Audit(r, "auth.google.login.redirect")
+	auditAuth(r, "auth.google.login", "oauth_login", "success", "redirect_issued", "anonymous", "auth_provider", "google")
 	http.Redirect(w, r, loginURL, http.StatusFound)
 }
 
@@ -65,7 +65,7 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if queryState == "" || code == "" {
 		status = "failure"
-		observability.Audit(r, "auth.google.callback.failed", "reason", "missing_code_or_state")
+		auditAuth(r, "auth.google.callback", "oauth_callback", "failure", "missing_code_or_state", "anonymous", "auth_provider", "google")
 		observability.RecordAuthLogin(r.Context(), "google", "failure")
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "missing state or code", nil)
 		return
@@ -74,7 +74,7 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	state, ok := security.VerifySignedState(stateCookie, h.stateKey)
 	if !ok || state != queryState {
 		status = "failure"
-		observability.Audit(r, "auth.google.callback.failed", "reason", "invalid_state")
+		auditAuth(r, "auth.google.callback", "oauth_callback", "failure", "invalid_state", "anonymous", "auth_provider", "google")
 		observability.RecordAuthLogin(r.Context(), "google", "failure")
 		response.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "invalid oauth state", nil)
 		return
@@ -89,13 +89,13 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "google auth is disabled", nil)
 			return
 		}
-		observability.Audit(r, "auth.google.callback.failed", "reason", "oauth_exchange", "error", err.Error())
+		auditAuth(r, "auth.google.callback", "oauth_callback", "failure", "oauth_exchange_error", "anonymous", "auth_provider", "google", "error", err.Error())
 		observability.RecordAuthLogin(r.Context(), "google", "failure")
 		response.Error(w, r, http.StatusUnauthorized, "OAUTH_FAILED", err.Error(), nil)
 		return
 	}
 	h.cookieMgr.SetTokenCookies(w, result.AccessToken, result.RefreshToken, result.CSRFToken, h.refreshTTL)
-	observability.Audit(r, "auth.login.success", "user_id", result.User.ID, "provider", "google")
+	auditAuth(r, "auth.login", "login", "success", "oauth_google", observability.ActorUserID(result.User.ID), "user", observability.ActorUserID(result.User.ID), "provider", "google")
 	observability.RecordAuthLogin(r.Context(), "google", "success")
 	response.JSON(w, r, http.StatusOK, map[string]any{"user": result.User, "csrf_token": result.CSRFToken, "expires_at": result.ExpiresAt})
 }
@@ -110,7 +110,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	refresh := security.GetCookie(r, "refresh_token")
 	if refresh == "" {
 		status = "failure"
-		observability.Audit(r, "auth.refresh.failed", "reason", "missing_refresh_cookie")
+		auditAuth(r, "auth.refresh", "refresh", "failure", "missing_refresh_cookie", "anonymous", "session", "unknown")
 		observability.RecordAuthRefresh(r.Context(), "failure")
 		response.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "missing refresh token", nil)
 		return
@@ -124,13 +124,13 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 			reason = "refresh_reuse_detected"
 			metricStatus = "reuse_detected"
 		}
-		observability.Audit(r, "auth.refresh.failed", "reason", reason)
+		auditAuth(r, "auth.refresh", "refresh", "failure", reason, "anonymous", "session", "unknown")
 		observability.RecordAuthRefresh(r.Context(), metricStatus)
 		response.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "invalid refresh token", nil)
 		return
 	}
 	h.cookieMgr.SetTokenCookies(w, result.AccessToken, result.RefreshToken, result.CSRFToken, h.refreshTTL)
-	observability.Audit(r, "auth.refresh.success", "user_id", result.User.ID)
+	auditAuth(r, "auth.refresh", "refresh", "success", "token_rotated", observability.ActorUserID(result.User.ID), "user", observability.ActorUserID(result.User.ID))
 	observability.RecordAuthRefresh(r.Context(), "success")
 	response.JSON(w, r, http.StatusOK, map[string]any{"user": result.User, "csrf_token": result.CSRFToken, "expires_at": result.ExpiresAt})
 }
@@ -145,7 +145,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
 		status = "failure"
-		observability.Audit(r, "auth.logout.failed", "reason", "missing_auth_context")
+		auditAuth(r, "auth.logout", "logout", "failure", "missing_auth_context", "anonymous", "session", "unknown")
 		observability.RecordAuthLogout(r.Context(), "failure")
 		response.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "missing auth context", nil)
 		return
@@ -153,20 +153,20 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	uid, err := h.authSvc.ParseUserID(claims.Subject)
 	if err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.logout.failed", "reason", "invalid_subject")
+		auditAuth(r, "auth.logout", "logout", "failure", "invalid_subject", "anonymous", "session", "unknown")
 		observability.RecordAuthLogout(r.Context(), "failure")
 		response.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "invalid subject", nil)
 		return
 	}
 	if err := h.authSvc.Logout(uid); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.logout.failed", "user_id", uid, "reason", "revoke_error")
+		auditAuth(r, "auth.logout", "logout", "failure", "revoke_error", observability.ActorUserID(uid), "user", observability.ActorUserID(uid))
 		observability.RecordAuthLogout(r.Context(), "failure")
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "logout failed", nil)
 		return
 	}
 	h.cookieMgr.ClearTokenCookies(w)
-	observability.Audit(r, "auth.logout.success", "user_id", uid)
+	auditAuth(r, "auth.logout", "logout", "success", "sessions_revoked", observability.ActorUserID(uid), "user", observability.ActorUserID(uid))
 	observability.RecordAuthLogout(r.Context(), "success")
 	response.JSON(w, r, http.StatusOK, map[string]string{"status": "logged_out"})
 }
@@ -184,7 +184,7 @@ func (h *AuthHandler) LocalRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.register.failed", "reason", "invalid_payload")
+		auditAuth(r, "auth.local.register", "register", "failure", "invalid_payload", "anonymous", "user", "unknown")
 		observability.RecordAuthLogin(r.Context(), "local", "failure")
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
 		return
@@ -192,7 +192,7 @@ func (h *AuthHandler) LocalRegister(w http.ResponseWriter, r *http.Request) {
 	result, err := h.authSvc.RegisterLocal(req.Email, req.Name, req.Password, r.UserAgent(), clientIP(r))
 	if err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.register.failed", "reason", "service_error", "error", err.Error())
+		auditAuth(r, "auth.local.register", "register", "failure", "service_error", "anonymous", "user", "unknown", "error", err.Error())
 		observability.RecordAuthLogin(r.Context(), "local", "failure")
 		switch {
 		case errors.Is(err, service.ErrLocalAuthDisabled):
@@ -205,7 +205,7 @@ func (h *AuthHandler) LocalRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.RequiresVerification {
-		observability.Audit(r, "auth.local.register.pending_verification", "user_id", result.User.ID)
+		auditAuth(r, "auth.local.register", "register", "accepted", "verification_required", observability.ActorUserID(result.User.ID), "user", observability.ActorUserID(result.User.ID))
 		response.JSON(w, r, http.StatusCreated, map[string]any{
 			"user":                  result.User,
 			"requires_verification": true,
@@ -213,7 +213,7 @@ func (h *AuthHandler) LocalRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.cookieMgr.SetTokenCookies(w, result.AccessToken, result.RefreshToken, result.CSRFToken, h.refreshTTL)
-	observability.Audit(r, "auth.local.register.success", "user_id", result.User.ID)
+	auditAuth(r, "auth.local.register", "register", "success", "session_created", observability.ActorUserID(result.User.ID), "user", observability.ActorUserID(result.User.ID))
 	observability.RecordAuthLogin(r.Context(), "local", "success")
 	response.JSON(w, r, http.StatusCreated, map[string]any{"user": result.User, "csrf_token": result.CSRFToken, "expires_at": result.ExpiresAt})
 }
@@ -230,7 +230,7 @@ func (h *AuthHandler) LocalLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.login.failed", "reason", "invalid_payload")
+		auditAuth(r, "auth.local.login", "login", "failure", "invalid_payload", "anonymous", "user", "unknown")
 		observability.RecordAuthLogin(r.Context(), "local", "failure")
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
 		return
@@ -238,7 +238,7 @@ func (h *AuthHandler) LocalLogin(w http.ResponseWriter, r *http.Request) {
 	result, err := h.authSvc.LoginWithLocalPassword(req.Email, req.Password, r.UserAgent(), clientIP(r))
 	if err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.login.failed", "reason", "login_error", "error", err.Error())
+		auditAuth(r, "auth.local.login", "login", "failure", "login_error", "anonymous", "user", "unknown", "error", err.Error())
 		observability.RecordAuthLogin(r.Context(), "local", "failure")
 		switch {
 		case errors.Is(err, service.ErrLocalAuthDisabled):
@@ -253,7 +253,7 @@ func (h *AuthHandler) LocalLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.cookieMgr.SetTokenCookies(w, result.AccessToken, result.RefreshToken, result.CSRFToken, h.refreshTTL)
-	observability.Audit(r, "auth.local.login.success", "user_id", result.User.ID)
+	auditAuth(r, "auth.local.login", "login", "success", "credentials_valid", observability.ActorUserID(result.User.ID), "user", observability.ActorUserID(result.User.ID))
 	observability.RecordAuthLogin(r.Context(), "local", "success")
 	response.JSON(w, r, http.StatusOK, map[string]any{"user": result.User, "csrf_token": result.CSRFToken, "expires_at": result.ExpiresAt})
 }
@@ -269,13 +269,13 @@ func (h *AuthHandler) LocalVerifyRequest(w http.ResponseWriter, r *http.Request)
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.verify.request.failed", "reason", "invalid_payload")
+		auditAuth(r, "auth.local.verify.request", "verify_request", "failure", "invalid_payload", "anonymous", "user", "unknown")
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
 		return
 	}
 	if err := h.authSvc.RequestLocalEmailVerification(req.Email); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.verify.request.failed", "reason", "service_error", "error", err.Error())
+		auditAuth(r, "auth.local.verify.request", "verify_request", "failure", "service_error", "anonymous", "user", "unknown", "error", err.Error())
 		switch {
 		case errors.Is(err, service.ErrLocalAuthDisabled):
 			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "local auth is disabled", nil)
@@ -284,7 +284,7 @@ func (h *AuthHandler) LocalVerifyRequest(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	}
-	observability.Audit(r, "auth.local.verify.request.accepted")
+	auditAuth(r, "auth.local.verify.request", "verify_request", "accepted", "verification_token_issued", "anonymous", "user", "unknown")
 	response.JSON(w, r, http.StatusAccepted, map[string]string{"status": "verification_requested"})
 }
 
@@ -299,13 +299,13 @@ func (h *AuthHandler) LocalVerifyConfirm(w http.ResponseWriter, r *http.Request)
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.verify.confirm.failed", "reason", "invalid_payload")
+		auditAuth(r, "auth.local.verify.confirm", "verify_confirm", "failure", "invalid_payload", "anonymous", "verification_token", "unknown")
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
 		return
 	}
 	if err := h.authSvc.ConfirmLocalEmailVerification(req.Token); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.verify.confirm.failed", "reason", "service_error", "error", err.Error())
+		auditAuth(r, "auth.local.verify.confirm", "verify_confirm", "failure", "service_error", "anonymous", "verification_token", "unknown", "error", err.Error())
 		switch {
 		case errors.Is(err, service.ErrLocalAuthDisabled):
 			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "local auth is disabled", nil)
@@ -316,7 +316,7 @@ func (h *AuthHandler) LocalVerifyConfirm(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	}
-	observability.Audit(r, "auth.local.verify.confirm.success")
+	auditAuth(r, "auth.local.verify.confirm", "verify_confirm", "success", "email_verified", "anonymous", "verification_token", "consumed")
 	response.JSON(w, r, http.StatusOK, map[string]string{"status": "email_verified"})
 }
 
@@ -331,13 +331,13 @@ func (h *AuthHandler) LocalPasswordForgot(w http.ResponseWriter, r *http.Request
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.password.forgot.failed", "reason", "invalid_payload")
+		auditAuth(r, "auth.local.password.forgot", "password_forgot", "failure", "invalid_payload", "anonymous", "user", "unknown")
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
 		return
 	}
 	if err := h.authSvc.ForgotLocalPassword(req.Email); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.password.forgot.failed", "reason", "service_error", "error", err.Error())
+		auditAuth(r, "auth.local.password.forgot", "password_forgot", "failure", "service_error", "anonymous", "user", "unknown", "error", err.Error())
 		switch {
 		case errors.Is(err, service.ErrLocalAuthDisabled):
 			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "local auth is disabled", nil)
@@ -346,7 +346,7 @@ func (h *AuthHandler) LocalPasswordForgot(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-	observability.Audit(r, "auth.local.password.forgot.requested")
+	auditAuth(r, "auth.local.password.forgot", "password_forgot", "accepted", "reset_requested", "anonymous", "user", "unknown")
 	response.JSON(w, r, http.StatusOK, map[string]string{"status": "if the account exists, reset instructions were sent"})
 }
 
@@ -362,13 +362,13 @@ func (h *AuthHandler) LocalPasswordReset(w http.ResponseWriter, r *http.Request)
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.password.reset.failed", "reason", "invalid_payload")
+		auditAuth(r, "auth.local.password.reset", "password_reset", "failure", "invalid_payload", "anonymous", "password_reset_token", "unknown")
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
 		return
 	}
 	if err := h.authSvc.ResetLocalPassword(req.Token, req.NewPassword); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.password.reset.failed", "reason", "service_error", "error", err.Error())
+		auditAuth(r, "auth.local.password.reset", "password_reset", "failure", "service_error", "anonymous", "password_reset_token", "unknown", "error", err.Error())
 		switch {
 		case errors.Is(err, service.ErrLocalAuthDisabled):
 			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "local auth is disabled", nil)
@@ -381,7 +381,7 @@ func (h *AuthHandler) LocalPasswordReset(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	}
-	observability.Audit(r, "auth.local.password.reset.success")
+	auditAuth(r, "auth.local.password.reset", "password_reset", "success", "password_updated", "anonymous", "password_reset_token", "consumed")
 	response.JSON(w, r, http.StatusOK, map[string]string{"status": "password_reset"})
 }
 
@@ -409,13 +409,13 @@ func (h *AuthHandler) LocalChangePassword(w http.ResponseWriter, r *http.Request
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.change_password.failed", "reason", "invalid_payload", "user_id", userID)
+		auditAuth(r, "auth.local.change_password", "password_change", "failure", "invalid_payload", observability.ActorUserID(userID), "user", observability.ActorUserID(userID))
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
 		return
 	}
 	if err := h.authSvc.ChangeLocalPassword(userID, req.CurrentPassword, req.NewPassword); err != nil {
 		status = "failure"
-		observability.Audit(r, "auth.local.change_password.failed", "reason", "change_error", "user_id", userID, "error", err.Error())
+		auditAuth(r, "auth.local.change_password", "password_change", "failure", "change_error", observability.ActorUserID(userID), "user", observability.ActorUserID(userID), "error", err.Error())
 		switch {
 		case errors.Is(err, service.ErrLocalAuthDisabled):
 			response.Error(w, r, http.StatusNotFound, "NOT_ENABLED", "local auth is disabled", nil)
@@ -429,7 +429,7 @@ func (h *AuthHandler) LocalChangePassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 	h.cookieMgr.ClearTokenCookies(w)
-	observability.Audit(r, "auth.local.change_password.success", "user_id", userID)
+	auditAuth(r, "auth.local.change_password", "password_change", "success", "password_updated", observability.ActorUserID(userID), "user", observability.ActorUserID(userID))
 	response.JSON(w, r, http.StatusOK, map[string]string{"status": "password_changed"})
 }
 
@@ -440,4 +440,16 @@ func clientIP(r *http.Request) string {
 		return strings.TrimSpace(parts[0])
 	}
 	return r.RemoteAddr
+}
+
+func auditAuth(r *http.Request, eventName, action, outcome, reason, actorUserID, targetType, targetID string, attrs ...any) {
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   eventName,
+		ActorUserID: actorUserID,
+		TargetType:  targetType,
+		TargetID:    targetID,
+		Action:      action,
+		Outcome:     outcome,
+		Reason:      reason,
+	}, attrs...)
 }

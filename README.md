@@ -214,6 +214,8 @@ Your command surface stays simple, for example:
 - `task test:admin-rbac-write`
 - `task test:admin-list`
 - `task test:problem-details`
+- `task test:idempotency`
+- `task test:audit`
 - `task security`
 
 ## Auth Lifecycle Integration Tests
@@ -403,6 +405,13 @@ OpenAPI spec:
 - RBAC is permission-based and enforced in route middleware.
 - Auth and API endpoints use separate fixed-window rate limiters.
 - Scoped mutating endpoints enforce idempotency keys with replay/conflict semantics (`Idempotency-Key`).
+
+## Audit Taxonomy
+
+- Audit logs now use a typed per-route schema with stable keys:
+- `event_name,event_version,actor_user_id,actor_ip,target_type,target_id,action,outcome,reason,request_id,trace_id,span_id,ts`
+- Event catalog and query examples are documented in:
+- `docs/audit-taxonomy.md`
 
 ## Error Negotiation
 

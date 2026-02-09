@@ -36,6 +36,14 @@ Scoped endpoints requiring `Idempotency-Key`:
 - `POST /api/v1/admin/roles`
 - `PATCH /api/v1/admin/users/{id}/roles`
 
+## Audit Taxonomy
+
+The API now emits typed structured audit events with stable keys for security/ops queries:
+- `event_name,event_version,actor_user_id,actor_ip,target_type,target_id,action,outcome,reason,request_id,trace_id,span_id,ts`
+
+See:
+- `docs/audit-taxonomy.md` for catalog and Loki query examples.
+
 ## RBAC Admin Write Endpoints
 - `PATCH /api/v1/admin/roles/{id}`
 - `DELETE /api/v1/admin/roles/{id}`

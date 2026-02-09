@@ -57,6 +57,11 @@ tasks:
     cmds:
       - go test ./test/integration -run TestIdempotency -v
 
+  test:audit:
+    cmds:
+      - go test ./internal/observability -run TestBuildAuditEvent -v
+      - go test ./test/integration -run TestAuditTaxonomy -v
+
   lint:
     deps: [lint:tools]
     cmds:

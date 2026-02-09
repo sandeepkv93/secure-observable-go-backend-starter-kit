@@ -129,7 +129,15 @@ func (h *AdminHandler) SetUserRoles(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to set roles", nil)
 		return
 	}
-	observability.Audit(r, "admin.user.roles.updated", "target_user_id", userID, "role_ids", body.RoleIDs)
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   "admin.user_roles.update",
+		ActorUserID: adminActorID(r),
+		TargetType:  "user",
+		TargetID:    strconv.FormatUint(uint64(userID), 10),
+		Action:      "set_roles",
+		Outcome:     "success",
+		Reason:      "roles_updated",
+	}, "role_ids", body.RoleIDs)
 	observability.RecordAdminRBACMutation(r.Context(), "user_role", "set_user_roles", "success")
 	response.JSON(w, r, http.StatusOK, map[string]any{"user_id": userID, "role_ids": body.RoleIDs})
 }
@@ -199,7 +207,15 @@ func (h *AdminHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "failed to create role", nil)
 		return
 	}
-	observability.Audit(r, "admin.role.created", "role_id", role.ID, "role_name", role.Name, "after_permissions", body.Permissions)
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   "admin.role.create",
+		ActorUserID: adminActorID(r),
+		TargetType:  "role",
+		TargetID:    strconv.FormatUint(uint64(role.ID), 10),
+		Action:      "create",
+		Outcome:     "success",
+		Reason:      "role_created",
+	}, "role_name", role.Name, "after_permissions", body.Permissions)
 	observability.RecordAdminRBACMutation(r.Context(), "role", "create", "success")
 	response.JSON(w, r, http.StatusCreated, role)
 }
@@ -294,8 +310,15 @@ func (h *AdminHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updated, _ := h.roleRepo.FindByID(roleID)
-	observability.Audit(r, "admin.role.updated",
-		"role_id", roleID,
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   "admin.role.update",
+		ActorUserID: adminActorID(r),
+		TargetType:  "role",
+		TargetID:    strconv.FormatUint(uint64(roleID), 10),
+		Action:      "update",
+		Outcome:     "success",
+		Reason:      "role_updated",
+	},
 		"before_name", before.Name,
 		"after_name", updated.Name,
 		"before_permissions", permissionsToStrings(before.Permissions),
@@ -345,7 +368,15 @@ func (h *AdminHandler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to delete role", nil)
 		return
 	}
-	observability.Audit(r, "admin.role.deleted", "role_id", roleID, "role_name", role.Name)
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   "admin.role.delete",
+		ActorUserID: adminActorID(r),
+		TargetType:  "role",
+		TargetID:    strconv.FormatUint(uint64(roleID), 10),
+		Action:      "delete",
+		Outcome:     "success",
+		Reason:      "role_deleted",
+	}, "role_name", role.Name)
 	observability.RecordAdminRBACMutation(r.Context(), "role", "delete", "success")
 	response.JSON(w, r, http.StatusOK, map[string]any{"role_id": roleID, "status": "deleted"})
 }
@@ -402,7 +433,15 @@ func (h *AdminHandler) CreatePermission(w http.ResponseWriter, r *http.Request) 
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to create permission", nil)
 		return
 	}
-	observability.Audit(r, "admin.permission.created", "permission_id", permission.ID, "permission", resource+":"+action)
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   "admin.permission.create",
+		ActorUserID: adminActorID(r),
+		TargetType:  "permission",
+		TargetID:    strconv.FormatUint(uint64(permission.ID), 10),
+		Action:      "create",
+		Outcome:     "success",
+		Reason:      "permission_created",
+	}, "permission", resource+":"+action)
 	observability.RecordAdminRBACMutation(r.Context(), "permission", "create", "success")
 	response.JSON(w, r, http.StatusCreated, permission)
 }
@@ -470,7 +509,15 @@ func (h *AdminHandler) UpdatePermission(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	updated, _ := h.permRepo.FindByID(permID)
-	observability.Audit(r, "admin.permission.updated", "permission_id", permID, "before", before.Resource+":"+before.Action, "after", updated.Resource+":"+updated.Action)
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   "admin.permission.update",
+		ActorUserID: adminActorID(r),
+		TargetType:  "permission",
+		TargetID:    strconv.FormatUint(uint64(permID), 10),
+		Action:      "update",
+		Outcome:     "success",
+		Reason:      "permission_updated",
+	}, "before", before.Resource+":"+before.Action, "after", updated.Resource+":"+updated.Action)
 	observability.RecordAdminRBACMutation(r.Context(), "permission", "update", "success")
 	response.JSON(w, r, http.StatusOK, updated)
 }
@@ -517,7 +564,15 @@ func (h *AdminHandler) DeletePermission(w http.ResponseWriter, r *http.Request) 
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to delete permission", nil)
 		return
 	}
-	observability.Audit(r, "admin.permission.deleted", "permission_id", permID, "permission", permToken)
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   "admin.permission.delete",
+		ActorUserID: adminActorID(r),
+		TargetType:  "permission",
+		TargetID:    strconv.FormatUint(uint64(permID), 10),
+		Action:      "delete",
+		Outcome:     "success",
+		Reason:      "permission_deleted",
+	}, "permission", permToken)
 	observability.RecordAdminRBACMutation(r.Context(), "permission", "delete", "success")
 	response.JSON(w, r, http.StatusOK, map[string]any{"permission_id": permID, "status": "deleted"})
 }
@@ -530,7 +585,15 @@ func (h *AdminHandler) SyncRBAC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	actorID, _ := actorIDFromRequest(r)
-	observability.Audit(r, "admin.rbac.sync", "actor_user_id", actorID, "report", report)
+	observability.EmitAudit(r, observability.AuditInput{
+		EventName:   "admin.rbac.sync",
+		ActorUserID: observability.ActorUserID(actorID),
+		TargetType:  "rbac",
+		TargetID:    "seed",
+		Action:      "sync",
+		Outcome:     "success",
+		Reason:      "seed_reconciled",
+	}, "report", report)
 	observability.RecordAdminRBACMutation(r.Context(), "sync", "sync", "success")
 	response.JSON(w, r, http.StatusOK, report)
 }
@@ -694,6 +757,14 @@ func actorIDFromRequest(r *http.Request) (uint, error) {
 		return 0, err
 	}
 	return uint(id64), nil
+}
+
+func adminActorID(r *http.Request) string {
+	actorID, err := actorIDFromRequest(r)
+	if err != nil {
+		return "anonymous"
+	}
+	return observability.ActorUserID(actorID)
 }
 
 func parsePathID(input string) (uint, error) {

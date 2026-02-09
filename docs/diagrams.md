@@ -2,6 +2,7 @@
 
 This document contains Mermaid sources for major repository workflows.
 The same diagrams are also summarized in `README.md`.
+For canonical audit event schema and query taxonomy, see `docs/audit-taxonomy.md`.
 
 ## System Architecture
 

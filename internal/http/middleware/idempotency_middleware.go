@@ -54,7 +54,15 @@ func (m *IdempotencyMiddleware) Middleware(scope string) func(http.Handler) http
 			begin, err := m.store.Begin(r.Context(), scope, key, fingerprint, m.ttl)
 			if err != nil {
 				observability.RecordIdempotencyEvent(r.Context(), scope, "store_error")
-				observability.Audit(r, "idempotency.store.error", "scope", scope, "reason", err.Error())
+				observability.EmitAudit(r, observability.AuditInput{
+					EventName:   "idempotency.check",
+					ActorUserID: actorUserIDForAudit(r),
+					TargetType:  "idempotency_key",
+					TargetID:    shortHash(key),
+					Action:      "check",
+					Outcome:     "failure",
+					Reason:      "store_error",
+				}, "scope", scope, "error", err.Error())
 				response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "idempotency check failed", nil)
 				return
 			}
@@ -62,17 +70,41 @@ func (m *IdempotencyMiddleware) Middleware(scope string) func(http.Handler) http
 			switch begin.State {
 			case service.IdempotencyStateConflict:
 				observability.RecordIdempotencyEvent(r.Context(), scope, "conflict")
-				observability.Audit(r, "idempotency.conflict", "scope", scope, "key_hash", shortHash(key))
+				observability.EmitAudit(r, observability.AuditInput{
+					EventName:   "idempotency.check",
+					ActorUserID: actorUserIDForAudit(r),
+					TargetType:  "idempotency_key",
+					TargetID:    shortHash(key),
+					Action:      "check",
+					Outcome:     "rejected",
+					Reason:      "fingerprint_conflict",
+				}, "scope", scope)
 				response.Error(w, r, http.StatusConflict, "CONFLICT", "idempotency key reuse with different payload", nil)
 				return
 			case service.IdempotencyStateInProgress:
 				observability.RecordIdempotencyEvent(r.Context(), scope, "in_progress")
-				observability.Audit(r, "idempotency.in_progress", "scope", scope, "key_hash", shortHash(key))
+				observability.EmitAudit(r, observability.AuditInput{
+					EventName:   "idempotency.check",
+					ActorUserID: actorUserIDForAudit(r),
+					TargetType:  "idempotency_key",
+					TargetID:    shortHash(key),
+					Action:      "check",
+					Outcome:     "rejected",
+					Reason:      "request_in_progress",
+				}, "scope", scope)
 				response.Error(w, r, http.StatusConflict, "CONFLICT", "request with this idempotency key is in progress", nil)
 				return
 			case service.IdempotencyStateReplay:
 				observability.RecordIdempotencyEvent(r.Context(), scope, "replayed")
-				observability.Audit(r, "idempotency.replayed", "scope", scope, "key_hash", shortHash(key))
+				observability.EmitAudit(r, observability.AuditInput{
+					EventName:   "idempotency.replay",
+					ActorUserID: actorUserIDForAudit(r),
+					TargetType:  "idempotency_key",
+					TargetID:    shortHash(key),
+					Action:      "replay",
+					Outcome:     "success",
+					Reason:      "cached_response",
+				}, "scope", scope)
 				writeCachedResponse(w, begin.Cached)
 				return
 			}
@@ -93,7 +125,15 @@ func (m *IdempotencyMiddleware) Middleware(scope string) func(http.Handler) http
 				Body:        rec.body.Bytes(),
 			}, m.ttl); err != nil {
 				observability.RecordIdempotencyEvent(r.Context(), scope, "store_error")
-				observability.Audit(r, "idempotency.complete.error", "scope", scope, "reason", err.Error())
+				observability.EmitAudit(r, observability.AuditInput{
+					EventName:   "idempotency.complete",
+					ActorUserID: actorUserIDForAudit(r),
+					TargetType:  "idempotency_key",
+					TargetID:    shortHash(key),
+					Action:      "complete",
+					Outcome:     "failure",
+					Reason:      "store_error",
+				}, "scope", scope, "error", err.Error())
 			}
 		})
 	}
@@ -137,6 +177,13 @@ func actorForScope(r *http.Request) string {
 		return "sub:" + claims.Subject
 	}
 	return "ip:" + clientIPFromRequest(r)
+}
+
+func actorUserIDForAudit(r *http.Request) string {
+	if claims, ok := ClaimsFromContext(r.Context()); ok {
+		return claims.Subject
+	}
+	return "anonymous"
 }
 
 func clientIPFromRequest(r *http.Request) string {
