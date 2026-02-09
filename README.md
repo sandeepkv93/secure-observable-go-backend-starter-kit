@@ -213,6 +213,8 @@ Configuration is loaded and validated in `internal/config/config.go`.
 - `BOOTSTRAP_ADMIN_EMAIL`
 - `AUTH_RATE_LIMIT_PER_MIN` (default `30`)
 - `API_RATE_LIMIT_PER_MIN` (default `120`)
+- `RATE_LIMIT_REDIS_ENABLED` (default `true`)
+- `REDIS_ADDR`, `REDIS_PASSWORD`, `REDIS_DB`, `RATE_LIMIT_REDIS_PREFIX`
 - `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAMESITE`
 - `CORS_ALLOWED_ORIGINS`
 

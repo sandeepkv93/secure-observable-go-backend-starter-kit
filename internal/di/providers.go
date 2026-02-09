@@ -8,12 +8,14 @@ import (
 	"time"
 
 	"github.com/google/wire"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/app"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/config"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/database"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/handler"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/middleware"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/http/router"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/observability"
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/repository"
@@ -30,6 +32,7 @@ var ObservabilitySet = wire.NewSet(
 
 var RuntimeInfraSet = wire.NewSet(
 	provideRuntimeDB,
+	provideRedisClient,
 )
 
 var RepositorySet = wire.NewSet(
@@ -63,6 +66,8 @@ var HTTPSet = wire.NewSet(
 	provideAuthHandler,
 	handler.NewUserHandler,
 	handler.NewAdminHandler,
+	provideGlobalRateLimiter,
+	provideAuthRateLimiter,
 	provideRouterDependencies,
 	router.NewRouter,
 	provideHTTPServer,
@@ -117,6 +122,17 @@ func provideRuntimeDB(cfg *config.Config) (*gorm.DB, error) {
 	return db, nil
 }
 
+func provideRedisClient(cfg *config.Config) redis.UniversalClient {
+	if !cfg.RateLimitRedisEnabled {
+		return nil
+	}
+	return redis.NewClient(&redis.Options{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
+	})
+}
+
 func provideJWTManager(cfg *config.Config) *security.JWTManager {
 	return security.NewJWTManager(cfg.JWTIssuer, cfg.JWTAudience, cfg.JWTAccessSecret, cfg.JWTRefreshSecret)
 }
@@ -133,24 +149,56 @@ func provideAuthHandler(authSvc service.AuthServiceInterface, cookieMgr *securit
 	return handler.NewAuthHandler(authSvc, cookieMgr, cfg.StateSigningSecret, cfg.JWTRefreshTTL)
 }
 
+func provideGlobalRateLimiter(cfg *config.Config, redisClient redis.UniversalClient) router.GlobalRateLimiterFunc {
+	if cfg.RateLimitRedisEnabled && redisClient != nil {
+		redisLimiter := middleware.NewRedisFixedWindowLimiter(redisClient, cfg.RateLimitRedisPrefix+":api")
+		return middleware.NewDistributedRateLimiter(
+			redisLimiter,
+			cfg.APIRateLimitPerMin,
+			time.Minute,
+			middleware.FailOpen,
+			"api",
+		).Middleware()
+	}
+	return middleware.NewRateLimiter(cfg.APIRateLimitPerMin, time.Minute).Middleware()
+}
+
+func provideAuthRateLimiter(cfg *config.Config, redisClient redis.UniversalClient) router.AuthRateLimiterFunc {
+	if cfg.RateLimitRedisEnabled && redisClient != nil {
+		redisLimiter := middleware.NewRedisFixedWindowLimiter(redisClient, cfg.RateLimitRedisPrefix+":auth")
+		return middleware.NewDistributedRateLimiter(
+			redisLimiter,
+			cfg.AuthRateLimitPerMin,
+			time.Minute,
+			middleware.FailClosed,
+			"auth",
+		).Middleware()
+	}
+	return middleware.NewRateLimiter(cfg.AuthRateLimitPerMin, time.Minute).Middleware()
+}
+
 func provideRouterDependencies(
 	authHandler *handler.AuthHandler,
 	userHandler *handler.UserHandler,
 	adminHandler *handler.AdminHandler,
 	jwt *security.JWTManager,
 	rbac service.RBACAuthorizer,
+	globalRateLimiter router.GlobalRateLimiterFunc,
+	authRateLimiter router.AuthRateLimiterFunc,
 	cfg *config.Config,
 ) router.Dependencies {
 	return router.Dependencies{
-		AuthHandler:      authHandler,
-		UserHandler:      userHandler,
-		AdminHandler:     adminHandler,
-		JWTManager:       jwt,
-		RBACService:      rbac,
-		CORSOrigins:      cfg.CORSAllowedOrigins,
-		AuthRateLimitRPM: cfg.AuthRateLimitPerMin,
-		APIRateLimitRPM:  cfg.APIRateLimitPerMin,
-		EnableOTelHTTP:   cfg.OTELMetricsEnabled || cfg.OTELTracingEnabled,
+		AuthHandler:       authHandler,
+		UserHandler:       userHandler,
+		AdminHandler:      adminHandler,
+		JWTManager:        jwt,
+		RBACService:       rbac,
+		CORSOrigins:       cfg.CORSAllowedOrigins,
+		AuthRateLimitRPM:  cfg.AuthRateLimitPerMin,
+		APIRateLimitRPM:   cfg.APIRateLimitPerMin,
+		GlobalRateLimiter: globalRateLimiter,
+		AuthRateLimiter:   authRateLimiter,
+		EnableOTelHTTP:    cfg.OTELMetricsEnabled || cfg.OTELTracingEnabled,
 	}
 }
 

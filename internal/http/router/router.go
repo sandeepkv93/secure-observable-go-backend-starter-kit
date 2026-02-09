@@ -16,16 +16,21 @@ import (
 )
 
 type Dependencies struct {
-	AuthHandler      *handler.AuthHandler
-	UserHandler      *handler.UserHandler
-	AdminHandler     *handler.AdminHandler
-	JWTManager       *security.JWTManager
-	RBACService      service.RBACAuthorizer
-	CORSOrigins      []string
-	AuthRateLimitRPM int
-	APIRateLimitRPM  int
-	EnableOTelHTTP   bool
+	AuthHandler       *handler.AuthHandler
+	UserHandler       *handler.UserHandler
+	AdminHandler      *handler.AdminHandler
+	JWTManager        *security.JWTManager
+	RBACService       service.RBACAuthorizer
+	CORSOrigins       []string
+	AuthRateLimitRPM  int
+	APIRateLimitRPM   int
+	GlobalRateLimiter GlobalRateLimiterFunc
+	AuthRateLimiter   AuthRateLimiterFunc
+	EnableOTelHTTP    bool
 }
+
+type GlobalRateLimiterFunc func(http.Handler) http.Handler
+type AuthRateLimiterFunc func(http.Handler) http.Handler
 
 func NewRouter(dep Dependencies) http.Handler {
 	r := chi.NewRouter()
@@ -36,9 +41,16 @@ func NewRouter(dep Dependencies) http.Handler {
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.CORS(dep.CORSOrigins))
 	r.Use(middleware.BodyLimit(1 << 20))
-	r.Use(middleware.NewRateLimiter(dep.APIRateLimitRPM, time.Minute).Middleware())
+	if dep.GlobalRateLimiter != nil {
+		r.Use(dep.GlobalRateLimiter)
+	} else {
+		r.Use(middleware.NewRateLimiter(dep.APIRateLimitRPM, time.Minute).Middleware())
+	}
 
-	authLimiter := middleware.NewRateLimiter(dep.AuthRateLimitRPM, time.Minute)
+	authLimiter := dep.AuthRateLimiter
+	if authLimiter == nil {
+		authLimiter = middleware.NewRateLimiter(dep.AuthRateLimitRPM, time.Minute).Middleware()
+	}
 
 	r.Get("/health/live", func(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
@@ -49,15 +61,15 @@ func NewRouter(dep Dependencies) http.Handler {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
-			r.With(authLimiter.Middleware()).Get("/google/login", dep.AuthHandler.GoogleLogin)
-			r.With(authLimiter.Middleware()).Get("/google/callback", dep.AuthHandler.GoogleCallback)
-			r.With(authLimiter.Middleware()).Post("/local/register", dep.AuthHandler.LocalRegister)
-			r.With(authLimiter.Middleware()).Post("/local/login", dep.AuthHandler.LocalLogin)
+			r.With(authLimiter).Get("/google/login", dep.AuthHandler.GoogleLogin)
+			r.With(authLimiter).Get("/google/callback", dep.AuthHandler.GoogleCallback)
+			r.With(authLimiter).Post("/local/register", dep.AuthHandler.LocalRegister)
+			r.With(authLimiter).Post("/local/login", dep.AuthHandler.LocalLogin)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.CSRFMiddleware)
-				r.With(authLimiter.Middleware()).Post("/refresh", dep.AuthHandler.Refresh)
+				r.With(authLimiter).Post("/refresh", dep.AuthHandler.Refresh)
 				r.With(middleware.AuthMiddleware(dep.JWTManager)).Post("/logout", dep.AuthHandler.Logout)
-				r.With(middleware.AuthMiddleware(dep.JWTManager), authLimiter.Middleware()).Post("/local/change-password", dep.AuthHandler.LocalChangePassword)
+				r.With(middleware.AuthMiddleware(dep.JWTManager), authLimiter).Post("/local/change-password", dep.AuthHandler.LocalChangePassword)
 			})
 		})
 

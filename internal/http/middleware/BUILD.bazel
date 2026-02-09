@@ -1,10 +1,11 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "middleware",
     srcs = [
         "auth_middleware.go",
         "rate_limit_middleware.go",
+        "rate_limit_redis.go",
         "rbac_middleware.go",
         "request_logging_middleware.go",
         "security_middleware.go",
@@ -17,5 +18,12 @@ go_library(
         "//internal/service",
         "@com_github_go_chi_chi_v5//:chi",
         "@com_github_go_chi_chi_v5//middleware",
+        "@com_github_redis_go_redis_v9//:go-redis",
     ],
+)
+
+go_test(
+    name = "middleware_test",
+    srcs = ["rate_limit_middleware_test.go"],
+    embed = [":middleware"],
 )

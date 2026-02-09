@@ -35,8 +35,13 @@ type Config struct {
 	AuthLocalRequireEmailVerification bool
 	BootstrapAdminEmail               string
 
-	AuthRateLimitPerMin int
-	APIRateLimitPerMin  int
+	AuthRateLimitPerMin   int
+	APIRateLimitPerMin    int
+	RateLimitRedisEnabled bool
+	RedisAddr             string
+	RedisPassword         string
+	RedisDB               int
+	RateLimitRedisPrefix  string
 
 	OTELServiceName           string
 	OTELEnvironment           string
@@ -83,6 +88,11 @@ func Load() (*Config, error) {
 		BootstrapAdminEmail:               strings.TrimSpace(strings.ToLower(os.Getenv("BOOTSTRAP_ADMIN_EMAIL"))),
 		AuthRateLimitPerMin:               getEnvInt("AUTH_RATE_LIMIT_PER_MIN", 30),
 		APIRateLimitPerMin:                getEnvInt("API_RATE_LIMIT_PER_MIN", 120),
+		RateLimitRedisEnabled:             getEnvBool("RATE_LIMIT_REDIS_ENABLED", true),
+		RedisAddr:                         getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword:                     os.Getenv("REDIS_PASSWORD"),
+		RedisDB:                           getEnvInt("REDIS_DB", 0),
+		RateLimitRedisPrefix:              getEnv("RATE_LIMIT_REDIS_PREFIX", "rl"),
 
 		OTELServiceName:          getEnv("OTEL_SERVICE_NAME", "secure-observable-go-backend-starter-kit"),
 		OTELEnvironment:          getEnv("OTEL_ENVIRONMENT", env),
@@ -162,6 +172,9 @@ func (c *Config) Validate() error {
 	}
 	if c.APIRateLimitPerMin <= 0 {
 		errs = append(errs, "API_RATE_LIMIT_PER_MIN must be > 0")
+	}
+	if c.RateLimitRedisEnabled && strings.TrimSpace(c.RedisAddr) == "" {
+		errs = append(errs, "REDIS_ADDR is required when RATE_LIMIT_REDIS_ENABLED=true")
 	}
 	if (c.OTELMetricsEnabled || c.OTELTracingEnabled || c.OTELLogsEnabled) && c.OTELExporterOTLPEndpoint == "" {
 		errs = append(errs, "OTEL_EXPORTER_OTLP_ENDPOINT is required when OTel is enabled")
