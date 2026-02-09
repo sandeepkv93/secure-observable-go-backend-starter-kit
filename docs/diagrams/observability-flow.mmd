@@ -1,0 +1,11 @@
+flowchart TD
+    API[API + OTel SDK]\nMetrics/Traces/Logs --> COL[OTel Collector]
+    COL --> MIMIR[Mimir\nmetrics + exemplars]
+    COL --> TEMPO[Tempo\ntraces]
+    COL --> LOKI[Loki\nlogs]
+
+    LOADGEN[cmd/loadgen] --> API
+    OBSCHECK[cmd/obscheck] --> GRAFANA[Grafana API]
+    GRAFANA --> MIMIR
+    GRAFANA --> TEMPO
+    GRAFANA --> LOKI

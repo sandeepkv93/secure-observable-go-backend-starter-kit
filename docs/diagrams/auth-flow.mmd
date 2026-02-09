@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant U as User Browser
+    participant API as API Server
+    participant G as Google OAuth
+    participant DB as PostgreSQL
+
+    U->>API: GET /api/v1/auth/google/login
+    API-->>U: Redirect to Google
+    U->>G: Consent + login
+    G-->>U: Redirect with code
+    U->>API: GET /api/v1/auth/google/callback?code=...
+    API->>G: Exchange code for tokens/user profile
+    API->>DB: Upsert user + oauth account + session
+    API-->>U: Set access/refresh cookies + csrf cookie
+    U->>API: GET /api/v1/me (cookie auth)
+    API->>DB: Resolve session/user
+    API-->>U: User profile

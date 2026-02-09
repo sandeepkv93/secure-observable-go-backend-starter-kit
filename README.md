@@ -46,6 +46,7 @@ Production-oriented Go backend starter with:
 │   ├── service/                  # business logic layer
 │   └── tools/                    # shared CLI tool logic (Cobra + Bubble Tea)
 ├── migrations/                   # SQL migrations (bootstrap)
+├── docs/                         # architecture and workflow diagrams
 ├── taskfiles/                    # modular Task definitions
 ├── test/integration/             # integration tests
 ├── docker-compose.yml            # local stack
@@ -74,6 +75,68 @@ Dependency Injection:
 - Providers and wiring in `internal/di`
 - Regenerated via `task wire`
 - Checked via `task wire-check`
+
+## Mermaid Diagrams
+
+Additional diagrams are available in `docs/diagrams.md`.
+
+### System Architecture
+
+```mermaid
+flowchart LR
+    Client[Client] --> Router[Chi Router + Middleware]
+    Router --> Handlers[HTTP Handlers]
+    Handlers --> Services[Service Layer]
+    Services --> Repos[Repository Layer]
+    Repos --> DB[(PostgreSQL)]
+
+    Router -. emits telemetry .-> OTel[OTel SDK]
+    OTel --> Collector[OTel Collector]
+    Collector --> Tempo[Tempo]
+    Collector --> Loki[Loki]
+    Collector --> Mimir[Mimir]
+    Grafana[Grafana] --> Tempo
+    Grafana --> Loki
+    Grafana --> Mimir
+```
+
+### OAuth Login and Session Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User Browser
+    participant API as API Server
+    participant G as Google OAuth
+    participant DB as PostgreSQL
+
+    U->>API: GET /api/v1/auth/google/login
+    API-->>U: Redirect to Google
+    U->>G: Consent + login
+    G-->>U: Redirect with code
+    U->>API: GET /api/v1/auth/google/callback?code=...
+    API->>G: Exchange code for tokens/user profile
+    API->>DB: Upsert user + oauth account + session
+    API-->>U: Set access/refresh cookies + csrf cookie
+    U->>API: GET /api/v1/me (cookie auth)
+    API->>DB: Resolve session/user
+    API-->>U: User profile
+```
+
+### Observability Data Flow
+
+```mermaid
+flowchart TD
+    API[API + OTel SDK]\nMetrics/Traces/Logs --> COL[OTel Collector]
+    COL --> MIMIR[Mimir\nmetrics + exemplars]
+    COL --> TEMPO[Tempo\ntraces]
+    COL --> LOKI[Loki\nlogs]
+
+    LOADGEN[cmd/loadgen] --> API
+    OBSCHECK[cmd/obscheck] --> GRAFANA[Grafana API]
+    GRAFANA --> MIMIR
+    GRAFANA --> TEMPO
+    GRAFANA --> LOKI
+```
 
 ## Prerequisites
 

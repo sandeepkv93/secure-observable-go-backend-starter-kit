@@ -1,0 +1,15 @@
+flowchart LR
+    Client[Client] --> Router[Chi Router + Middleware]
+    Router --> Handlers[HTTP Handlers]
+    Handlers --> Services[Service Layer]
+    Services --> Repos[Repository Layer]
+    Repos --> DB[(PostgreSQL)]
+
+    Router -. emits telemetry .-> OTel[OTel SDK]
+    OTel --> Collector[OTel Collector]
+    Collector --> Tempo[Tempo]
+    Collector --> Loki[Loki]
+    Collector --> Mimir[Mimir]
+    Grafana[Grafana] --> Tempo
+    Grafana --> Loki
+    Grafana --> Mimir

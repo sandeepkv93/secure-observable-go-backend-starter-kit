@@ -1,0 +1,10 @@
+flowchart LR
+    PR[Push / Pull Request] --> GHA[GitHub Actions CI]
+    GHA --> B1[task bazel:build]
+    GHA --> B2[task bazel:test]
+    GHA --> GZ[task gazelle:check]
+    GHA --> TD[task tidy-check]
+    GHA --> WR[task wire-check]
+
+    DEV[git push] --> PRE[pre-push hook]
+    PRE --> LOCALCI[task ci]
