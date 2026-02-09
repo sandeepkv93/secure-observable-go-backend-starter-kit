@@ -24,6 +24,18 @@ go run ./cmd/api
 - `SHUTDOWN_HTTP_DRAIN_TIMEOUT`
 - `SHUTDOWN_OBSERVABILITY_TIMEOUT`
 
+## Idempotency Controls
+- `IDEMPOTENCY_ENABLED`
+- `IDEMPOTENCY_REDIS_ENABLED`
+- `IDEMPOTENCY_TTL`
+- `IDEMPOTENCY_REDIS_PREFIX`
+
+Scoped endpoints requiring `Idempotency-Key`:
+- `POST /api/v1/auth/local/register`
+- `POST /api/v1/auth/local/password/forgot`
+- `POST /api/v1/admin/roles`
+- `PATCH /api/v1/admin/users/{id}/roles`
+
 ## RBAC Admin Write Endpoints
 - `PATCH /api/v1/admin/roles/{id}`
 - `DELETE /api/v1/admin/roles/{id}`
