@@ -254,10 +254,10 @@ func (h *redisMetricsHook) ProcessPipelineHook(next redis.ProcessPipelineHook) r
 }
 
 func redisCommandStatus(err error) string {
-	switch {
-	case err == nil:
+	switch err {
+	case nil:
 		return "success"
-	case err == redis.Nil:
+	case redis.Nil:
 		return "miss"
 	default:
 		return "error"
