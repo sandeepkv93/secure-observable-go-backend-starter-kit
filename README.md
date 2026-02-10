@@ -332,6 +332,12 @@ Configuration is loaded and validated in `internal/config/config.go`.
 - `RATE_LIMIT_BURST_MULTIPLIER` (default `1.5`, minimum `1`)
 - `RATE_LIMIT_SUSTAINED_WINDOW` (default `1m`)
 - `RATE_LIMIT_REDIS_ENABLED` (default `true`)
+- `AUTH_ABUSE_PROTECTION_ENABLED` (default `true`)
+- `AUTH_ABUSE_FREE_ATTEMPTS` (default `3`)
+- `AUTH_ABUSE_BASE_DELAY` (default `2s`)
+- `AUTH_ABUSE_MULTIPLIER` (default `2.0`)
+- `AUTH_ABUSE_MAX_DELAY` (default `5m`)
+- `AUTH_ABUSE_RESET_WINDOW` (default `30m`)
 - `IDEMPOTENCY_ENABLED` (default `true`)
 - `IDEMPOTENCY_REDIS_ENABLED` (default `true`, falls back to DB store when disabled)
 - `IDEMPOTENCY_TTL` (default `24h`)
@@ -341,7 +347,7 @@ Configuration is loaded and validated in `internal/config/config.go`.
 - `NEGATIVE_LOOKUP_CACHE_TTL` (default `15s`)
 - `RBAC_PERMISSION_CACHE_ENABLED` (default `true`)
 - `RBAC_PERMISSION_CACHE_TTL` (default `5m`)
-- `REDIS_ADDR`, `REDIS_PASSWORD`, `REDIS_DB`, `RATE_LIMIT_REDIS_PREFIX`
+- `REDIS_ADDR`, `REDIS_PASSWORD`, `REDIS_DB`, `RATE_LIMIT_REDIS_PREFIX`, `AUTH_ABUSE_REDIS_PREFIX`
 - `IDEMPOTENCY_REDIS_PREFIX` (default `idem`)
 - `ADMIN_LIST_CACHE_REDIS_PREFIX` (default `admin_list_cache`)
 - `NEGATIVE_LOOKUP_CACHE_REDIS_PREFIX` (default `negative_lookup_cache`)
@@ -452,6 +458,9 @@ OpenAPI spec:
   - refresh (`/api/v1/auth/refresh`)
   - admin writes (`PATCH /admin/users/{id}/roles`, role/permission write routes)
   - RBAC sync (`POST /api/v1/admin/rbac/sync`)
+- Local auth abuse controls apply exponential cooldown per normalized identity (email) and per client IP for:
+  - local login failures (`POST /api/v1/auth/local/login`)
+  - password forgot requests (`POST /api/v1/auth/local/password/forgot`)
 - API limiter keys authenticated requests by access-token subject (`sub:<user_id>`) and falls back to client IP when no valid access token is present.
 - Forgot-password rate limiting is Redis-distributed when `RATE_LIMIT_REDIS_ENABLED=true`, with fail-closed fallback semantics for backend errors.
 - Scoped mutating endpoints enforce idempotency keys with replay/conflict semantics (`Idempotency-Key`).

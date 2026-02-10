@@ -7,6 +7,7 @@ go_test(
         "admin_list_pagination_test.go",
         "admin_rbac_write_test.go",
         "audit_taxonomy_test.go",
+        "auth_abuse_test.go",
         "auth_lifecycle_test.go",
         "auth_middleware_test.go",
         "email_verification_test.go",

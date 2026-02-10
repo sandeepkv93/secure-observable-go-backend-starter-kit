@@ -5,6 +5,8 @@ go_library(
     srcs = [
         "admin_list_cache.go",
         "admin_list_cache_redis.go",
+        "auth_abuse_guard.go",
+        "auth_abuse_guard_redis.go",
         "auth_service.go",
         "email_verification_notifier.go",
         "idempotency_store.go",
@@ -43,6 +45,7 @@ go_test(
     name = "service_test",
     srcs = [
         "admin_list_cache_test.go",
+        "auth_abuse_guard_test.go",
         "auth_password_policy_test.go",
         "negative_lookup_cache_test.go",
         "rbac_permission_resolver_test.go",

@@ -358,3 +358,25 @@ func TestProvideRedisClientEnabledForAdminListCache(t *testing.T) {
 		t.Fatal("expected redis client when negative lookup cache is enabled")
 	}
 }
+
+func TestProvideAuthAbuseGuard(t *testing.T) {
+	cfg := &config.Config{
+		AuthAbuseProtectionEnabled: true,
+		AuthAbuseFreeAttempts:      3,
+		AuthAbuseBaseDelay:         time.Second,
+		AuthAbuseMultiplier:        2,
+		AuthAbuseMaxDelay:          5 * time.Minute,
+		AuthAbuseResetWindow:       30 * time.Minute,
+		AuthAbuseRedisPrefix:       "auth_abuse",
+	}
+	guard := provideAuthAbuseGuard(cfg, nil)
+	if guard == nil {
+		t.Fatal("expected in-memory auth abuse guard")
+	}
+
+	cfg.AuthAbuseProtectionEnabled = false
+	guard = provideAuthAbuseGuard(cfg, nil)
+	if guard == nil {
+		t.Fatal("expected noop auth abuse guard when disabled")
+	}
+}

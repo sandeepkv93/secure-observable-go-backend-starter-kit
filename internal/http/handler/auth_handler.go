@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -16,13 +17,29 @@ import (
 
 type AuthHandler struct {
 	authSvc    service.AuthServiceInterface
+	abuseGuard service.AuthAbuseGuard
 	cookieMgr  *security.CookieManager
 	stateKey   string
 	refreshTTL time.Duration
 }
 
-func NewAuthHandler(authSvc service.AuthServiceInterface, cookieMgr *security.CookieManager, stateKey string, refreshTTL time.Duration) *AuthHandler {
-	return &AuthHandler{authSvc: authSvc, cookieMgr: cookieMgr, stateKey: stateKey, refreshTTL: refreshTTL}
+func NewAuthHandler(
+	authSvc service.AuthServiceInterface,
+	abuseGuard service.AuthAbuseGuard,
+	cookieMgr *security.CookieManager,
+	stateKey string,
+	refreshTTL time.Duration,
+) *AuthHandler {
+	if abuseGuard == nil {
+		abuseGuard = service.NewNoopAuthAbuseGuard()
+	}
+	return &AuthHandler{
+		authSvc:    authSvc,
+		abuseGuard: abuseGuard,
+		cookieMgr:  cookieMgr,
+		stateKey:   stateKey,
+		refreshTTL: refreshTTL,
+	}
 }
 
 func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
@@ -235,9 +252,28 @@ func (h *AuthHandler) LocalLogin(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
 		return
 	}
+	retryAfter, err := h.abuseGuard.Check(r.Context(), service.AuthAbuseScopeLogin, req.Email, clientIP(r))
+	if err != nil {
+		status = "failure"
+		auditAuth(r, "auth.local.login", "login", "failure", "abuse_check_error", "anonymous", "user", "unknown", "error", err.Error())
+		writeAbuseCooldownHeaders(w, retryAfter)
+		response.Error(w, r, http.StatusTooManyRequests, "RATE_LIMITED", "too many requests", nil)
+		return
+	}
+	if retryAfter > 0 {
+		status = "failure"
+		auditAuth(r, "auth.local.login", "login", "rejected", "abuse_cooldown", "anonymous", "user", "unknown")
+		writeAbuseCooldownHeaders(w, retryAfter)
+		response.Error(w, r, http.StatusTooManyRequests, "RATE_LIMITED", "too many requests", nil)
+		return
+	}
 	result, err := h.authSvc.LoginWithLocalPassword(req.Email, req.Password, r.UserAgent(), clientIP(r))
 	if err != nil {
 		status = "failure"
+		_, abuseErr := h.abuseGuard.RegisterFailure(r.Context(), service.AuthAbuseScopeLogin, req.Email, clientIP(r))
+		if abuseErr != nil {
+			auditAuth(r, "auth.local.login", "login", "failure", "abuse_record_error", "anonymous", "user", "unknown", "error", abuseErr.Error())
+		}
 		auditAuth(r, "auth.local.login", "login", "failure", "login_error", "anonymous", "user", "unknown", "error", err.Error())
 		observability.RecordAuthLogin(r.Context(), "local", "failure")
 		switch {
@@ -251,6 +287,9 @@ func (h *AuthHandler) LocalLogin(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, r, http.StatusUnauthorized, "UNAUTHORIZED", "invalid credentials", nil)
 		}
 		return
+	}
+	if err := h.abuseGuard.Reset(r.Context(), service.AuthAbuseScopeLogin, req.Email, clientIP(r)); err != nil {
+		auditAuth(r, "auth.local.login", "login", "failure", "abuse_reset_error", observability.ActorUserID(result.User.ID), "user", observability.ActorUserID(result.User.ID), "error", err.Error())
 	}
 	h.cookieMgr.SetTokenCookies(w, result.AccessToken, result.RefreshToken, result.CSRFToken, h.refreshTTL)
 	auditAuth(r, "auth.local.login", "login", "success", "credentials_valid", observability.ActorUserID(result.User.ID), "user", observability.ActorUserID(result.User.ID))
@@ -335,6 +374,21 @@ func (h *AuthHandler) LocalPasswordForgot(w http.ResponseWriter, r *http.Request
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid payload", nil)
 		return
 	}
+	retryAfter, err := h.abuseGuard.Check(r.Context(), service.AuthAbuseScopeForgot, req.Email, clientIP(r))
+	if err != nil {
+		status = "failure"
+		auditAuth(r, "auth.local.password.forgot", "password_forgot", "failure", "abuse_check_error", "anonymous", "user", "unknown", "error", err.Error())
+		writeAbuseCooldownHeaders(w, retryAfter)
+		response.Error(w, r, http.StatusTooManyRequests, "RATE_LIMITED", "too many requests", nil)
+		return
+	}
+	if retryAfter > 0 {
+		status = "failure"
+		auditAuth(r, "auth.local.password.forgot", "password_forgot", "rejected", "abuse_cooldown", "anonymous", "user", "unknown")
+		writeAbuseCooldownHeaders(w, retryAfter)
+		response.Error(w, r, http.StatusTooManyRequests, "RATE_LIMITED", "too many requests", nil)
+		return
+	}
 	if err := h.authSvc.ForgotLocalPassword(req.Email); err != nil {
 		status = "failure"
 		auditAuth(r, "auth.local.password.forgot", "password_forgot", "failure", "service_error", "anonymous", "user", "unknown", "error", err.Error())
@@ -344,6 +398,13 @@ func (h *AuthHandler) LocalPasswordForgot(w http.ResponseWriter, r *http.Request
 		default:
 			response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "password reset request failed", nil)
 		}
+		return
+	}
+	if _, err := h.abuseGuard.RegisterFailure(r.Context(), service.AuthAbuseScopeForgot, req.Email, clientIP(r)); err != nil {
+		status = "failure"
+		auditAuth(r, "auth.local.password.forgot", "password_forgot", "failure", "abuse_record_error", "anonymous", "user", "unknown", "error", err.Error())
+		writeAbuseCooldownHeaders(w, retryAfter)
+		response.Error(w, r, http.StatusTooManyRequests, "RATE_LIMITED", "too many requests", nil)
 		return
 	}
 	auditAuth(r, "auth.local.password.forgot", "password_forgot", "accepted", "reset_requested", "anonymous", "user", "unknown")
@@ -440,6 +501,18 @@ func clientIP(r *http.Request) string {
 		return strings.TrimSpace(parts[0])
 	}
 	return r.RemoteAddr
+}
+
+func writeAbuseCooldownHeaders(w http.ResponseWriter, retryAfter time.Duration) {
+	seconds := int(retryAfter.Round(time.Second).Seconds())
+	if seconds <= 0 {
+		seconds = 1
+	}
+	resetAt := time.Now().Add(time.Duration(seconds) * time.Second).Unix()
+	w.Header().Set("Retry-After", fmt.Sprintf("%d", seconds))
+	w.Header().Set("X-RateLimit-Limit", "0")
+	w.Header().Set("X-RateLimit-Remaining", "0")
+	w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetAt))
 }
 
 func auditAuth(r *http.Request, eventName, action, outcome, reason, actorUserID, targetType, targetID string, attrs ...any) {

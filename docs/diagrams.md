@@ -128,11 +128,16 @@ sequenceDiagram
     participant C as Client
     participant R as Router
     participant RL as Forgot Limiter
+    participant AB as Auth Abuse Guard
     participant RS as Redis Store
     participant H as Forgot Handler
 
     C->>R: POST /api/v1/auth/local/password/forgot
     R->>RL: Apply forgot limiter middleware
+    RL->>AB: Check identity+ip cooldown
+    alt active cooldown
+        AB-->>C: 429 RATE_LIMITED (Retry-After + X-RateLimit-*)
+    else continue
     alt RATE_LIMIT_REDIS_ENABLED and redis client present
         RL->>RS: INCR window key (ip scoped)
         RS-->>RL: count + ttl
@@ -143,7 +148,9 @@ sequenceDiagram
         RL-->>C: 429 RATE_LIMITED (Retry-After + X-RateLimit-*)
     else allowed
         RL->>H: pass request (+ X-RateLimit-*)
+        H->>AB: Register forgot attempt (exp backoff)
         H-->>C: 200 generic response (+ X-RateLimit-*)
+    end
     end
 ```
 

@@ -73,6 +73,7 @@ var ServiceSet = wire.NewSet(
 
 var HTTPSet = wire.NewSet(
 	provideAuthHandler,
+	provideAuthAbuseGuard,
 	handler.NewUserHandler,
 	provideRBACPermissionCacheStore,
 	providePermissionResolver,
@@ -141,6 +142,7 @@ func provideRuntimeDB(cfg *config.Config) (*gorm.DB, error) {
 
 func provideRedisClient(cfg *config.Config) redis.UniversalClient {
 	if !cfg.RateLimitRedisEnabled &&
+		!cfg.AuthAbuseProtectionEnabled &&
 		(!cfg.IdempotencyEnabled || !cfg.IdempotencyRedisEnabled) &&
 		!cfg.AdminListCacheEnabled &&
 		!cfg.NegativeLookupCacheEnabled &&
@@ -224,8 +226,30 @@ func provideSessionService(cfg *config.Config, sessionRepo repository.SessionRep
 	return service.NewSessionService(sessionRepo, cfg.RefreshTokenPepper)
 }
 
-func provideAuthHandler(authSvc service.AuthServiceInterface, cookieMgr *security.CookieManager, cfg *config.Config) *handler.AuthHandler {
-	return handler.NewAuthHandler(authSvc, cookieMgr, cfg.StateSigningSecret, cfg.JWTRefreshTTL)
+func provideAuthAbuseGuard(cfg *config.Config, redisClient redis.UniversalClient) service.AuthAbuseGuard {
+	if !cfg.AuthAbuseProtectionEnabled {
+		return service.NewNoopAuthAbuseGuard()
+	}
+	policy := service.AuthAbusePolicy{
+		FreeAttempts: cfg.AuthAbuseFreeAttempts,
+		BaseDelay:    cfg.AuthAbuseBaseDelay,
+		Multiplier:   cfg.AuthAbuseMultiplier,
+		MaxDelay:     cfg.AuthAbuseMaxDelay,
+		ResetWindow:  cfg.AuthAbuseResetWindow,
+	}
+	if redisClient != nil {
+		return service.NewRedisAuthAbuseGuard(redisClient, cfg.AuthAbuseRedisPrefix, policy)
+	}
+	return service.NewInMemoryAuthAbuseGuard(policy)
+}
+
+func provideAuthHandler(
+	authSvc service.AuthServiceInterface,
+	abuseGuard service.AuthAbuseGuard,
+	cookieMgr *security.CookieManager,
+	cfg *config.Config,
+) *handler.AuthHandler {
+	return handler.NewAuthHandler(authSvc, abuseGuard, cookieMgr, cfg.StateSigningSecret, cfg.JWTRefreshTTL)
 }
 
 func provideGlobalRateLimiter(cfg *config.Config, redisClient redis.UniversalClient, jwt *security.JWTManager) router.GlobalRateLimiterFunc {

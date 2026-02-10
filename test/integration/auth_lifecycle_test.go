@@ -278,6 +278,12 @@ func newAuthTestServerWithOptions(t *testing.T, opts authTestServerOptions) (str
 		AuthPasswordResetTokenTTL:         15 * time.Minute,
 		AuthPasswordResetBaseURL:          "http://localhost:3000/reset-password",
 		AuthPasswordForgotRateLimitPerMin: 5,
+		AuthAbuseProtectionEnabled:        true,
+		AuthAbuseFreeAttempts:             3,
+		AuthAbuseBaseDelay:                2 * time.Second,
+		AuthAbuseMultiplier:               2.0,
+		AuthAbuseMaxDelay:                 5 * time.Minute,
+		AuthAbuseResetWindow:              30 * time.Minute,
 		BootstrapAdminEmail:               "",
 		JWTAccessTTL:                      15 * time.Minute,
 		JWTRefreshTTL:                     24 * time.Hour,
@@ -318,8 +324,27 @@ func newAuthTestServerWithOptions(t *testing.T, opts authTestServerOptions) (str
 	verificationTokenRepo := repository.NewVerificationTokenRepository(db)
 	authSvc := service.NewAuthService(cfg, oauthSvc, tokenSvc, userSvc, roleRepo, localCredRepo, verificationTokenRepo, verifyNotifier, resetNotifier)
 	cookieMgr := security.NewCookieManager("", false, "lax")
+	if cfg.AuthAbuseBaseDelay <= 0 {
+		cfg.AuthAbuseBaseDelay = 2 * time.Second
+	}
+	if cfg.AuthAbuseMultiplier <= 0 {
+		cfg.AuthAbuseMultiplier = 2
+	}
+	if cfg.AuthAbuseMaxDelay <= 0 {
+		cfg.AuthAbuseMaxDelay = 5 * time.Minute
+	}
+	if cfg.AuthAbuseResetWindow <= 0 {
+		cfg.AuthAbuseResetWindow = 30 * time.Minute
+	}
+	abuseGuard := service.NewInMemoryAuthAbuseGuard(service.AuthAbusePolicy{
+		FreeAttempts: cfg.AuthAbuseFreeAttempts,
+		BaseDelay:    cfg.AuthAbuseBaseDelay,
+		Multiplier:   cfg.AuthAbuseMultiplier,
+		MaxDelay:     cfg.AuthAbuseMaxDelay,
+		ResetWindow:  cfg.AuthAbuseResetWindow,
+	})
 
-	authHandler := handler.NewAuthHandler(authSvc, cookieMgr, "0123456789abcdef0123456789abcdef", cfg.JWTRefreshTTL)
+	authHandler := handler.NewAuthHandler(authSvc, abuseGuard, cookieMgr, "0123456789abcdef0123456789abcdef", cfg.JWTRefreshTTL)
 	userHandler := handler.NewUserHandler(userSvc, sessionSvc)
 	permissionCache := opts.rbacPermCache
 	if permissionCache == nil {

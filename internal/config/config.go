@@ -50,6 +50,13 @@ type Config struct {
 	RateLimitAdminSyncPerMin     int
 	RateLimitBurstMultiplier     float64
 	RateLimitSustainedWindow     time.Duration
+	AuthAbuseProtectionEnabled   bool
+	AuthAbuseFreeAttempts        int
+	AuthAbuseBaseDelay           time.Duration
+	AuthAbuseMultiplier          float64
+	AuthAbuseMaxDelay            time.Duration
+	AuthAbuseResetWindow         time.Duration
+	AuthAbuseRedisPrefix         string
 	AdminListCacheEnabled        bool
 	AdminListCacheTTL            time.Duration
 	AdminListCacheRedisPrefix    string
@@ -129,6 +136,9 @@ func Load() (*Config, error) {
 		RateLimitAdminWritePerMin:         getEnvInt("RATE_LIMIT_ADMIN_WRITE_PER_MIN", 30),
 		RateLimitAdminSyncPerMin:          getEnvInt("RATE_LIMIT_ADMIN_SYNC_PER_MIN", 10),
 		RateLimitBurstMultiplier:          getEnvFloat("RATE_LIMIT_BURST_MULTIPLIER", 1.5),
+		AuthAbuseProtectionEnabled:        getEnvBool("AUTH_ABUSE_PROTECTION_ENABLED", true),
+		AuthAbuseFreeAttempts:             getEnvInt("AUTH_ABUSE_FREE_ATTEMPTS", 3),
+		AuthAbuseMultiplier:               getEnvFloat("AUTH_ABUSE_MULTIPLIER", 2.0),
 		AdminListCacheEnabled:             getEnvBool("ADMIN_LIST_CACHE_ENABLED", true),
 		AdminListCacheRedisPrefix:         getEnv("ADMIN_LIST_CACHE_REDIS_PREFIX", "admin_list_cache"),
 		NegativeLookupCacheEnabled:        getEnvBool("NEGATIVE_LOOKUP_CACHE_ENABLED", true),
@@ -142,6 +152,7 @@ func Load() (*Config, error) {
 		RedisPassword:                     os.Getenv("REDIS_PASSWORD"),
 		RedisDB:                           getEnvInt("REDIS_DB", 0),
 		RateLimitRedisPrefix:              getEnv("RATE_LIMIT_REDIS_PREFIX", "rl"),
+		AuthAbuseRedisPrefix:              getEnv("AUTH_ABUSE_REDIS_PREFIX", "auth_abuse"),
 		IdempotencyRedisPrefix:            getEnv("IDEMPOTENCY_REDIS_PREFIX", "idem"),
 
 		OTELServiceName:          getEnv("OTEL_SERVICE_NAME", "secure-observable-go-backend-starter-kit"),
@@ -220,6 +231,24 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("parse RATE_LIMIT_SUSTAINED_WINDOW: %w", err)
 	}
 	cfg.RateLimitSustainedWindow = rateLimitSustainedWindow
+
+	authAbuseBaseDelay, err := time.ParseDuration(getEnv("AUTH_ABUSE_BASE_DELAY", "2s"))
+	if err != nil {
+		return nil, fmt.Errorf("parse AUTH_ABUSE_BASE_DELAY: %w", err)
+	}
+	cfg.AuthAbuseBaseDelay = authAbuseBaseDelay
+
+	authAbuseMaxDelay, err := time.ParseDuration(getEnv("AUTH_ABUSE_MAX_DELAY", "5m"))
+	if err != nil {
+		return nil, fmt.Errorf("parse AUTH_ABUSE_MAX_DELAY: %w", err)
+	}
+	cfg.AuthAbuseMaxDelay = authAbuseMaxDelay
+
+	authAbuseResetWindow, err := time.ParseDuration(getEnv("AUTH_ABUSE_RESET_WINDOW", "30m"))
+	if err != nil {
+		return nil, fmt.Errorf("parse AUTH_ABUSE_RESET_WINDOW: %w", err)
+	}
+	cfg.AuthAbuseResetWindow = authAbuseResetWindow
 
 	startGrace, err := time.ParseDuration(getEnv("SERVER_START_GRACE_PERIOD", "2s"))
 	if err != nil {
@@ -328,6 +357,21 @@ func (c *Config) Validate() error {
 	}
 	if c.RateLimitSustainedWindow < time.Second || c.RateLimitSustainedWindow > (15*time.Minute) {
 		errs = append(errs, "RATE_LIMIT_SUSTAINED_WINDOW must be between 1s and 15m")
+	}
+	if c.AuthAbuseFreeAttempts < 0 || c.AuthAbuseFreeAttempts > 20 {
+		errs = append(errs, "AUTH_ABUSE_FREE_ATTEMPTS must be between 0 and 20")
+	}
+	if c.AuthAbuseBaseDelay < time.Second || c.AuthAbuseBaseDelay > time.Minute {
+		errs = append(errs, "AUTH_ABUSE_BASE_DELAY must be between 1s and 1m")
+	}
+	if c.AuthAbuseMultiplier < 1 || c.AuthAbuseMultiplier > 10 {
+		errs = append(errs, "AUTH_ABUSE_MULTIPLIER must be between 1 and 10")
+	}
+	if c.AuthAbuseMaxDelay < c.AuthAbuseBaseDelay || c.AuthAbuseMaxDelay > time.Hour {
+		errs = append(errs, "AUTH_ABUSE_MAX_DELAY must be >= AUTH_ABUSE_BASE_DELAY and <= 1h")
+	}
+	if c.AuthAbuseResetWindow < time.Minute || c.AuthAbuseResetWindow > (24*time.Hour) {
+		errs = append(errs, "AUTH_ABUSE_RESET_WINDOW must be between 1m and 24h")
 	}
 	if c.AdminListCacheEnabled && (c.AdminListCacheTTL <= 0 || c.AdminListCacheTTL > (10*time.Minute)) {
 		errs = append(errs, "ADMIN_LIST_CACHE_TTL must be between 1s and 10m when admin list cache is enabled")
