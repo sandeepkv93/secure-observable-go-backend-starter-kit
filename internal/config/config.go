@@ -79,6 +79,15 @@ type Config struct {
 	RedisAddr                    string
 	RedisPassword                string
 	RedisDB                      int
+	RedisDialTimeout             time.Duration
+	RedisReadTimeout             time.Duration
+	RedisWriteTimeout            time.Duration
+	RedisMaxRetries              int
+	RedisMinRetryBackoff         time.Duration
+	RedisMaxRetryBackoff         time.Duration
+	RedisPoolSize                int
+	RedisMinIdleConns            int
+	RedisPoolTimeout             time.Duration
 	RateLimitRedisPrefix         string
 	ReadinessProbeTimeout        time.Duration
 	ServerStartGracePeriod       time.Duration
@@ -160,6 +169,9 @@ func Load() (*Config, error) {
 		RedisAddr:                         getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword:                     os.Getenv("REDIS_PASSWORD"),
 		RedisDB:                           getEnvInt("REDIS_DB", 0),
+		RedisMaxRetries:                   getEnvInt("REDIS_MAX_RETRIES", 3),
+		RedisPoolSize:                     getEnvInt("REDIS_POOL_SIZE", 10),
+		RedisMinIdleConns:                 getEnvInt("REDIS_MIN_IDLE_CONNS", 2),
 		RateLimitRedisPrefix:              getEnv("RATE_LIMIT_REDIS_PREFIX", "rl"),
 		AuthAbuseRedisPrefix:              getEnv("AUTH_ABUSE_REDIS_PREFIX", "auth_abuse"),
 		IdempotencyRedisPrefix:            getEnv("IDEMPOTENCY_REDIS_PREFIX", "idem"),
@@ -264,6 +276,42 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("parse SERVER_START_GRACE_PERIOD: %w", err)
 	}
 	cfg.ServerStartGracePeriod = startGrace
+
+	redisDialTimeout, err := time.ParseDuration(getEnv("REDIS_DIAL_TIMEOUT", "5s"))
+	if err != nil {
+		return nil, fmt.Errorf("parse REDIS_DIAL_TIMEOUT: %w", err)
+	}
+	cfg.RedisDialTimeout = redisDialTimeout
+
+	redisReadTimeout, err := time.ParseDuration(getEnv("REDIS_READ_TIMEOUT", "3s"))
+	if err != nil {
+		return nil, fmt.Errorf("parse REDIS_READ_TIMEOUT: %w", err)
+	}
+	cfg.RedisReadTimeout = redisReadTimeout
+
+	redisWriteTimeout, err := time.ParseDuration(getEnv("REDIS_WRITE_TIMEOUT", "3s"))
+	if err != nil {
+		return nil, fmt.Errorf("parse REDIS_WRITE_TIMEOUT: %w", err)
+	}
+	cfg.RedisWriteTimeout = redisWriteTimeout
+
+	redisMinRetryBackoff, err := time.ParseDuration(getEnv("REDIS_MIN_RETRY_BACKOFF", "8ms"))
+	if err != nil {
+		return nil, fmt.Errorf("parse REDIS_MIN_RETRY_BACKOFF: %w", err)
+	}
+	cfg.RedisMinRetryBackoff = redisMinRetryBackoff
+
+	redisMaxRetryBackoff, err := time.ParseDuration(getEnv("REDIS_MAX_RETRY_BACKOFF", "512ms"))
+	if err != nil {
+		return nil, fmt.Errorf("parse REDIS_MAX_RETRY_BACKOFF: %w", err)
+	}
+	cfg.RedisMaxRetryBackoff = redisMaxRetryBackoff
+
+	redisPoolTimeout, err := time.ParseDuration(getEnv("REDIS_POOL_TIMEOUT", "4s"))
+	if err != nil {
+		return nil, fmt.Errorf("parse REDIS_POOL_TIMEOUT: %w", err)
+	}
+	cfg.RedisPoolTimeout = redisPoolTimeout
 
 	shutdownTimeout, err := time.ParseDuration(getEnv("SHUTDOWN_TIMEOUT", "20s"))
 	if err != nil {
@@ -405,6 +453,33 @@ func (c *Config) Validate() error {
 	}
 	if (c.RateLimitRedisEnabled || (c.IdempotencyEnabled && c.IdempotencyRedisEnabled) || c.AdminListCacheEnabled || c.NegativeLookupCacheEnabled || c.RBACPermissionCacheEnabled) && strings.TrimSpace(c.RedisAddr) == "" {
 		errs = append(errs, "REDIS_ADDR is required when Redis-backed features are enabled")
+	}
+	if c.RedisDialTimeout < (100*time.Millisecond) || c.RedisDialTimeout > (30*time.Second) {
+		errs = append(errs, "REDIS_DIAL_TIMEOUT must be between 100ms and 30s")
+	}
+	if c.RedisReadTimeout < (100*time.Millisecond) || c.RedisReadTimeout > (30*time.Second) {
+		errs = append(errs, "REDIS_READ_TIMEOUT must be between 100ms and 30s")
+	}
+	if c.RedisWriteTimeout < (100*time.Millisecond) || c.RedisWriteTimeout > (30*time.Second) {
+		errs = append(errs, "REDIS_WRITE_TIMEOUT must be between 100ms and 30s")
+	}
+	if c.RedisMaxRetries < -1 || c.RedisMaxRetries > 20 {
+		errs = append(errs, "REDIS_MAX_RETRIES must be between -1 and 20")
+	}
+	if c.RedisMinRetryBackoff < 0 || c.RedisMinRetryBackoff > (5*time.Second) {
+		errs = append(errs, "REDIS_MIN_RETRY_BACKOFF must be between 0 and 5s")
+	}
+	if c.RedisMaxRetryBackoff < c.RedisMinRetryBackoff || c.RedisMaxRetryBackoff > (30*time.Second) {
+		errs = append(errs, "REDIS_MAX_RETRY_BACKOFF must be >= REDIS_MIN_RETRY_BACKOFF and <= 30s")
+	}
+	if c.RedisPoolSize <= 0 || c.RedisPoolSize > 1000 {
+		errs = append(errs, "REDIS_POOL_SIZE must be between 1 and 1000")
+	}
+	if c.RedisMinIdleConns < 0 || c.RedisMinIdleConns > c.RedisPoolSize {
+		errs = append(errs, "REDIS_MIN_IDLE_CONNS must be between 0 and REDIS_POOL_SIZE")
+	}
+	if c.RedisPoolTimeout < (100*time.Millisecond) || c.RedisPoolTimeout > (30*time.Second) {
+		errs = append(errs, "REDIS_POOL_TIMEOUT must be between 100ms and 30s")
 	}
 	if c.ReadinessProbeTimeout <= 0 {
 		errs = append(errs, "READINESS_PROBE_TIMEOUT must be > 0")

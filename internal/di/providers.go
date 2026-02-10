@@ -151,9 +151,18 @@ func provideRedisClient(cfg *config.Config) redis.UniversalClient {
 		return nil
 	}
 	return redis.NewClient(&redis.Options{
-		Addr:     cfg.RedisAddr,
-		Password: cfg.RedisPassword,
-		DB:       cfg.RedisDB,
+		Addr:            cfg.RedisAddr,
+		Password:        cfg.RedisPassword,
+		DB:              cfg.RedisDB,
+		DialTimeout:     cfg.RedisDialTimeout,
+		ReadTimeout:     cfg.RedisReadTimeout,
+		WriteTimeout:    cfg.RedisWriteTimeout,
+		MaxRetries:      cfg.RedisMaxRetries,
+		MinRetryBackoff: cfg.RedisMinRetryBackoff,
+		MaxRetryBackoff: cfg.RedisMaxRetryBackoff,
+		PoolSize:        cfg.RedisPoolSize,
+		MinIdleConns:    cfg.RedisMinIdleConns,
+		PoolTimeout:     cfg.RedisPoolTimeout,
 	})
 }
 

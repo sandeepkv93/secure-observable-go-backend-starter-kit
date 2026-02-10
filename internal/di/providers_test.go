@@ -338,6 +338,15 @@ func TestProvideRedisClientEnabledForAdminListCache(t *testing.T) {
 		NegativeLookupCacheEnabled: false,
 		RateLimitRedisEnabled:      false,
 		IdempotencyEnabled:         false,
+		RedisDialTimeout:           5 * time.Second,
+		RedisReadTimeout:           3 * time.Second,
+		RedisWriteTimeout:          3 * time.Second,
+		RedisMaxRetries:            3,
+		RedisMinRetryBackoff:       8 * time.Millisecond,
+		RedisMaxRetryBackoff:       512 * time.Millisecond,
+		RedisPoolSize:              10,
+		RedisMinIdleConns:          2,
+		RedisPoolTimeout:           4 * time.Second,
 	}
 	client := provideRedisClient(cfg)
 	if client != nil {
@@ -349,6 +358,38 @@ func TestProvideRedisClientEnabledForAdminListCache(t *testing.T) {
 	client = provideRedisClient(cfg)
 	if client == nil {
 		t.Fatal("expected redis client when admin list cache is enabled")
+	}
+	redisClient, ok := client.(*redis.Client)
+	if !ok {
+		t.Fatalf("expected *redis.Client, got %T", client)
+	}
+	opts := redisClient.Options()
+	if opts.DialTimeout != cfg.RedisDialTimeout {
+		t.Fatalf("expected redis dial timeout %v, got %v", cfg.RedisDialTimeout, opts.DialTimeout)
+	}
+	if opts.ReadTimeout != cfg.RedisReadTimeout {
+		t.Fatalf("expected redis read timeout %v, got %v", cfg.RedisReadTimeout, opts.ReadTimeout)
+	}
+	if opts.WriteTimeout != cfg.RedisWriteTimeout {
+		t.Fatalf("expected redis write timeout %v, got %v", cfg.RedisWriteTimeout, opts.WriteTimeout)
+	}
+	if opts.MaxRetries != cfg.RedisMaxRetries {
+		t.Fatalf("expected redis max retries %d, got %d", cfg.RedisMaxRetries, opts.MaxRetries)
+	}
+	if opts.MinRetryBackoff != cfg.RedisMinRetryBackoff {
+		t.Fatalf("expected redis min retry backoff %v, got %v", cfg.RedisMinRetryBackoff, opts.MinRetryBackoff)
+	}
+	if opts.MaxRetryBackoff != cfg.RedisMaxRetryBackoff {
+		t.Fatalf("expected redis max retry backoff %v, got %v", cfg.RedisMaxRetryBackoff, opts.MaxRetryBackoff)
+	}
+	if opts.PoolSize != cfg.RedisPoolSize {
+		t.Fatalf("expected redis pool size %d, got %d", cfg.RedisPoolSize, opts.PoolSize)
+	}
+	if opts.MinIdleConns != cfg.RedisMinIdleConns {
+		t.Fatalf("expected redis min idle conns %d, got %d", cfg.RedisMinIdleConns, opts.MinIdleConns)
+	}
+	if opts.PoolTimeout != cfg.RedisPoolTimeout {
+		t.Fatalf("expected redis pool timeout %v, got %v", cfg.RedisPoolTimeout, opts.PoolTimeout)
 	}
 
 	cfg.AdminListCacheEnabled = false
