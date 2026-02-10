@@ -3,6 +3,7 @@ package integration
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -27,6 +28,20 @@ func TestRateLimiterBlocksAfterLimit(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200 on request %d, got %d", i+1, w.Code)
 		}
+		if got := w.Header().Get("X-RateLimit-Limit"); got != "2" {
+			t.Fatalf("expected X-RateLimit-Limit=2 on request %d, got %q", i+1, got)
+		}
+		if got := w.Header().Get("X-RateLimit-Remaining"); got == "" {
+			t.Fatalf("expected X-RateLimit-Remaining on request %d", i+1)
+		}
+		if got := w.Header().Get("X-RateLimit-Reset"); got == "" {
+			t.Fatalf("expected X-RateLimit-Reset on request %d", i+1)
+		} else if _, err := strconv.ParseInt(got, 10, 64); err != nil {
+			t.Fatalf("expected numeric X-RateLimit-Reset on request %d, got %q", i+1, got)
+		}
+		if got := w.Header().Get("Retry-After"); got != "" {
+			t.Fatalf("did not expect Retry-After on request %d, got %q", i+1, got)
+		}
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
@@ -35,6 +50,20 @@ func TestRateLimiterBlocksAfterLimit(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 got %d", w.Code)
+	}
+	if got := w.Header().Get("X-RateLimit-Limit"); got != "2" {
+		t.Fatalf("expected X-RateLimit-Limit=2 on limited request, got %q", got)
+	}
+	if got := w.Header().Get("X-RateLimit-Remaining"); got != "0" {
+		t.Fatalf("expected X-RateLimit-Remaining=0 on limited request, got %q", got)
+	}
+	if got := w.Header().Get("X-RateLimit-Reset"); got == "" {
+		t.Fatal("expected X-RateLimit-Reset on limited request")
+	} else if _, err := strconv.ParseInt(got, 10, 64); err != nil {
+		t.Fatalf("expected numeric X-RateLimit-Reset on limited request, got %q", got)
+	}
+	if got := w.Header().Get("Retry-After"); got == "" {
+		t.Fatal("expected Retry-After on limited request")
 	}
 }
 

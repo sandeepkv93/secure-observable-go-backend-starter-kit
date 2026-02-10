@@ -444,6 +444,7 @@ OpenAPI spec:
 - RBAC is permission-based and enforced in route middleware.
 - RBAC permission checks use a short-lived user/session cache with invalidation on RBAC mutations.
 - Auth and API endpoints use separate fixed-window rate limiters.
+- Rate-limited responses include `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` response headers.
 - Route policy map applies endpoint-specific fixed-window limits for:
   - login (`/api/v1/auth/local/login`)
   - refresh (`/api/v1/auth/refresh`)

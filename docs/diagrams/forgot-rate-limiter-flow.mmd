@@ -14,8 +14,8 @@ sequenceDiagram
         RL->>RL: Local fixed-window check
     end
     alt over limit or backend error in fail-closed mode
-        RL-->>C: 429 RATE_LIMITED (Retry-After)
+        RL-->>C: 429 RATE_LIMITED (Retry-After + X-RateLimit-*)
     else allowed
-        RL->>H: pass request
-        H-->>C: 200 generic response
+        RL->>H: pass request (+ X-RateLimit-*)
+        H-->>C: 200 generic response (+ X-RateLimit-*)
     end

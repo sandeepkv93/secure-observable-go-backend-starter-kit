@@ -18,7 +18,7 @@ sequenceDiagram
     RL->>B: Allow(key, limit, window)
     alt allowed
         RL->>H: Continue request
-        H-->>C: 2xx/4xx/5xx
+        H-->>C: 2xx/4xx/5xx (+ X-RateLimit-*)
     else denied
-        RL-->>C: 429 RATE_LIMITED (Retry-After)
+        RL-->>C: 429 RATE_LIMITED (Retry-After + X-RateLimit-*)
     end

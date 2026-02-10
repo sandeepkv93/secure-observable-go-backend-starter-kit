@@ -140,10 +140,10 @@ sequenceDiagram
         RL->>RL: Local fixed-window check
     end
     alt over limit or backend error in fail-closed mode
-        RL-->>C: 429 RATE_LIMITED (Retry-After)
+        RL-->>C: 429 RATE_LIMITED (Retry-After + X-RateLimit-*)
     else allowed
-        RL->>H: pass request
-        H-->>C: 200 generic response
+        RL->>H: pass request (+ X-RateLimit-*)
+        H-->>C: 200 generic response (+ X-RateLimit-*)
     end
 ```
 
@@ -172,9 +172,9 @@ sequenceDiagram
     RL->>B: Allow(key, limit, window)
     alt allowed
         RL->>H: Continue request
-        H-->>C: 2xx/4xx/5xx
+        H-->>C: 2xx/4xx/5xx (+ X-RateLimit-*)
     else denied
-        RL-->>C: 429 RATE_LIMITED (Retry-After)
+        RL-->>C: 429 RATE_LIMITED (Retry-After + X-RateLimit-*)
     end
 ```
 
@@ -207,8 +207,8 @@ flowchart TD
     KeySubOrIP --> Store
     P0 --> Store
     Store --> Decision{Within limit?}
-    Decision -->|yes| Pass[Continue to handler]
-    Decision -->|no| Throttle[429 RATE_LIMITED + Retry-After]
+    Decision -->|yes| Pass[Continue to handler + X-RateLimit-*]
+    Decision -->|no| Throttle[429 RATE_LIMITED + Retry-After + X-RateLimit-*]
 ```
 
 Source: `docs/diagrams/route-rate-limit-policy-map-flow.mmd`

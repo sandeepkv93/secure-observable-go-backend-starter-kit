@@ -19,8 +19,15 @@ type fixedWindow struct {
 	windowStart time.Time
 }
 
+type Decision struct {
+	Allowed    bool
+	RetryAfter time.Duration
+	Remaining  int
+	ResetAt    time.Time
+}
+
 type Limiter interface {
-	Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, time.Duration, error)
+	Allow(ctx context.Context, key string, limit int, window time.Duration) (Decision, error)
 }
 
 type FailureMode string
@@ -95,7 +102,7 @@ func (rl *RateLimiter) Middleware() func(http.Handler) http.Handler {
 			if key == "" {
 				key = clientIPKey(r)
 			}
-			allowed, retryAfter, err := rl.limiter.Allow(r.Context(), key, rl.limit, rl.window)
+			decision, err := rl.limiter.Allow(r.Context(), key, rl.limit, rl.window)
 			if err != nil {
 				if rl.mode == FailOpen {
 					slog.Warn("rate limiter backend unavailable, allowing request",
@@ -106,12 +113,14 @@ func (rl *RateLimiter) Middleware() func(http.Handler) http.Handler {
 					next.ServeHTTP(w, r)
 					return
 				}
+				writeRateLimitHeaders(w.Header(), rl.limit, 0, time.Now().Add(rl.window))
 				w.Header().Set("Retry-After", retryAfterHeader(rl.window))
 				response.Error(w, r, http.StatusTooManyRequests, "RATE_LIMITED", "too many requests", nil)
 				return
 			}
-			if !allowed {
-				w.Header().Set("Retry-After", retryAfterHeader(retryAfter))
+			writeRateLimitHeaders(w.Header(), rl.limit, decision.Remaining, decision.ResetAt)
+			if !decision.Allowed {
+				w.Header().Set("Retry-After", retryAfterHeader(decision.RetryAfter))
 				response.Error(w, r, http.StatusTooManyRequests, "RATE_LIMITED", "too many requests", nil)
 				return
 			}
@@ -149,7 +158,7 @@ func SubjectOrIPKeyFunc(jwtMgr *security.JWTManager) func(r *http.Request) strin
 	}
 }
 
-func (rl *localFixedWindowLimiter) Allow(_ context.Context, key string, limit int, window time.Duration) (bool, time.Duration, error) {
+func (rl *localFixedWindowLimiter) Allow(_ context.Context, key string, limit int, window time.Duration) (Decision, error) {
 	now := time.Now()
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -166,17 +175,30 @@ func (rl *localFixedWindowLimiter) Allow(_ context.Context, key string, limit in
 	entry, ok := rl.store[key]
 	if !ok || now.Sub(entry.windowStart) >= window {
 		rl.store[key] = &fixedWindow{count: 1, windowStart: now}
-		return true, 0, nil
+		return Decision{
+			Allowed:   true,
+			Remaining: max(limit-1, 0),
+			ResetAt:   now.Add(window),
+		}, nil
 	}
 	if entry.count >= limit {
 		retryAfter := window - now.Sub(entry.windowStart)
 		if retryAfter < 0 {
 			retryAfter = 0
 		}
-		return false, retryAfter, nil
+		return Decision{
+			Allowed:    false,
+			RetryAfter: retryAfter,
+			Remaining:  0,
+			ResetAt:    now.Add(retryAfter),
+		}, nil
 	}
 	entry.count++
-	return true, 0, nil
+	return Decision{
+		Allowed:   true,
+		Remaining: max(limit-entry.count, 0),
+		ResetAt:   entry.windowStart.Add(window),
+	}, nil
 }
 
 func clientIPKey(r *http.Request) string {
@@ -196,4 +218,13 @@ func retryAfterHeader(d time.Duration) string {
 		seconds = 1
 	}
 	return fmt.Sprintf("%d", seconds)
+}
+
+func writeRateLimitHeaders(h http.Header, limit int, remaining int, resetAt time.Time) {
+	h.Set("X-RateLimit-Limit", fmt.Sprintf("%d", max(limit, 0)))
+	h.Set("X-RateLimit-Remaining", fmt.Sprintf("%d", max(remaining, 0)))
+	if resetAt.IsZero() {
+		resetAt = time.Now().Add(time.Second)
+	}
+	h.Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetAt.Unix()))
 }

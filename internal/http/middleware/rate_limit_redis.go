@@ -33,9 +33,10 @@ func NewRedisFixedWindowLimiter(client redis.UniversalClient, prefix string) *Re
 	}
 }
 
-func (l *RedisFixedWindowLimiter) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, time.Duration, error) {
+func (l *RedisFixedWindowLimiter) Allow(ctx context.Context, key string, limit int, window time.Duration) (Decision, error) {
+	now := time.Now()
 	if l.client == nil {
-		return false, window, fmt.Errorf("redis client is nil")
+		return Decision{}, fmt.Errorf("redis client is nil")
 	}
 	if key == "" {
 		key = "unknown"
@@ -47,20 +48,20 @@ func (l *RedisFixedWindowLimiter) Allow(ctx context.Context, key string, limit i
 	storeKey := fmt.Sprintf("%s:%s", l.prefix, key)
 	raw, err := redisFixedWindowScript.Run(ctx, l.client, []string{storeKey}, windowMS).Result()
 	if err != nil {
-		return false, window, err
+		return Decision{}, err
 	}
 	values, ok := raw.([]interface{})
 	if !ok || len(values) != 2 {
-		return false, window, fmt.Errorf("unexpected redis script response type")
+		return Decision{}, fmt.Errorf("unexpected redis script response type")
 	}
 
 	count, err := parseRedisInt64(values[0])
 	if err != nil {
-		return false, window, err
+		return Decision{}, err
 	}
 	ttlMS, err := parseRedisInt64(values[1])
 	if err != nil {
-		return false, window, err
+		return Decision{}, err
 	}
 	if ttlMS <= 0 {
 		ttlMS = int64(window / time.Millisecond)
@@ -69,7 +70,16 @@ func (l *RedisFixedWindowLimiter) Allow(ctx context.Context, key string, limit i
 		}
 	}
 	retryAfter := time.Duration(ttlMS) * time.Millisecond
-	return count <= int64(limit), retryAfter, nil
+	remaining := 0
+	if count < int64(limit) {
+		remaining = int(int64(limit) - count)
+	}
+	return Decision{
+		Allowed:    count <= int64(limit),
+		RetryAfter: retryAfter,
+		Remaining:  remaining,
+		ResetAt:    now.Add(retryAfter),
+	}, nil
 }
 
 func parseRedisInt64(v interface{}) (int64, error) {

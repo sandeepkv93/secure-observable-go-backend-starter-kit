@@ -22,5 +22,5 @@ flowchart TD
     KeySubOrIP --> Store
     P0 --> Store
     Store --> Decision{Within limit?}
-    Decision -->|yes| Pass[Continue to handler]
-    Decision -->|no| Throttle[429 RATE_LIMITED + Retry-After]
+    Decision -->|yes| Pass[Continue to handler + X-RateLimit-*]
+    Decision -->|no| Throttle[429 RATE_LIMITED + Retry-After + X-RateLimit-*]
