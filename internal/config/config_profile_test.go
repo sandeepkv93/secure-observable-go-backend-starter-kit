@@ -477,6 +477,26 @@ func TestValidateIdempotencyDBCleanupSettings(t *testing.T) {
 	}
 }
 
+func TestValidateRateLimitRedisOutagePolicies(t *testing.T) {
+	cfg := newValidConfigForProfileTests()
+	cfg.RateLimitOutagePolicyAPI = "fail_open"
+	cfg.RateLimitOutagePolicyAuth = "fail_closed"
+	cfg.RateLimitOutagePolicyForgot = "fail_open"
+	cfg.RateLimitOutagePolicyLogin = "fail_closed"
+	cfg.RateLimitOutagePolicyRefresh = "fail_open"
+	cfg.RateLimitOutagePolicyAdminW = "fail_closed"
+	cfg.RateLimitOutagePolicyAdminS = "fail_closed"
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid outage policies to pass validation: %v", err)
+	}
+
+	cfg.RateLimitOutagePolicyRefresh = "drop_requests"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for invalid redis outage policy")
+	}
+}
+
 func newValidConfigForProfileTests() *Config {
 	return &Config{
 		Env:                               "development",

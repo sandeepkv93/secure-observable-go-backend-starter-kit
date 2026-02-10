@@ -303,6 +303,7 @@ func TestProvideForgotRateLimiterRedisFailClosed(t *testing.T) {
 		RateLimitRedisEnabled:             true,
 		RateLimitRedisPrefix:              "rl",
 		AuthPasswordForgotRateLimitPerMin: 5,
+		RateLimitOutagePolicyForgot:       string(middleware.FailClosed),
 	}
 	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
 	mw := provideForgotRateLimiter(cfg, client, nil)
@@ -321,6 +322,100 @@ func TestProvideForgotRateLimiterRedisFailClosed(t *testing.T) {
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected fail-closed response when redis unavailable, got %d", rr.Code)
+	}
+}
+
+func TestProvideForgotRateLimiterRedisFailOpen(t *testing.T) {
+	cfg := &config.Config{
+		RateLimitRedisEnabled:             true,
+		RateLimitRedisPrefix:              "rl",
+		AuthPasswordForgotRateLimitPerMin: 5,
+		RateLimitOutagePolicyForgot:       string(middleware.FailOpen),
+	}
+	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+	mw := provideForgotRateLimiter(cfg, client, nil)
+	if mw == nil {
+		t.Fatal("expected forgot rate limiter middleware")
+	}
+	h := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req, err := http.NewRequest(http.MethodPost, "/api/v1/auth/local/password/forgot", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.RemoteAddr = "10.0.0.1:1234"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected fail-open response when redis unavailable, got %d", rr.Code)
+	}
+}
+
+func TestProvideGlobalRateLimiterRedisFailClosed(t *testing.T) {
+	cfg := &config.Config{
+		RateLimitRedisEnabled:    true,
+		RateLimitRedisPrefix:     "rl",
+		APIRateLimitPerMin:       5,
+		RateLimitOutagePolicyAPI: string(middleware.FailClosed),
+	}
+	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+	jwt := security.NewJWTManager(
+		"iss",
+		"aud",
+		"abcdefghijklmnopqrstuvwxyz123456",
+		"abcdefghijklmnopqrstuvwxyz654321",
+	)
+	mw := provideGlobalRateLimiter(cfg, client, jwt, nil)
+	if mw == nil {
+		t.Fatal("expected global rate limiter middleware")
+	}
+	h := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.RemoteAddr = "10.0.0.1:1234"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected fail-closed response when redis unavailable, got %d", rr.Code)
+	}
+}
+
+func TestProvideRoutePolicyLoginRedisFailOpen(t *testing.T) {
+	cfg := &config.Config{
+		RateLimitRedisEnabled:        true,
+		RateLimitRedisPrefix:         "rl",
+		RateLimitLoginPerMin:         1,
+		RateLimitRefreshPerMin:       2,
+		RateLimitAdminWritePerMin:    3,
+		RateLimitAdminSyncPerMin:     1,
+		RateLimitOutagePolicyLogin:   string(middleware.FailOpen),
+		RateLimitOutagePolicyRefresh: string(middleware.FailClosed),
+		RateLimitOutagePolicyAdminW:  string(middleware.FailClosed),
+		RateLimitOutagePolicyAdminS:  string(middleware.FailClosed),
+	}
+	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+	jwt := security.NewJWTManager(
+		"iss",
+		"aud",
+		"abcdefghijklmnopqrstuvwxyz123456",
+		"abcdefghijklmnopqrstuvwxyz654321",
+	)
+	policies := provideRouteRateLimitPolicies(cfg, client, jwt, nil)
+	loginLimiter := policies[router.RoutePolicyLogin]
+	if loginLimiter == nil {
+		t.Fatal("expected login limiter")
+	}
+	h := loginLimiter(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/local/login", nil)
+	req.RemoteAddr = "10.0.0.1:1234"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected fail-open response for login route when redis unavailable, got %d", rr.Code)
 	}
 }
 

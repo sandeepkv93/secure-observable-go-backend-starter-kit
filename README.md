@@ -332,6 +332,13 @@ Configuration is loaded and validated in `internal/config/config.go`.
 - `RATE_LIMIT_BURST_MULTIPLIER` (default `1.5`, minimum `1`)
 - `RATE_LIMIT_SUSTAINED_WINDOW` (default `1m`)
 - `RATE_LIMIT_REDIS_ENABLED` (default `true`)
+- `RATE_LIMIT_REDIS_OUTAGE_POLICY_API` (default `fail_open`, options: `fail_open|fail_closed`)
+- `RATE_LIMIT_REDIS_OUTAGE_POLICY_AUTH` (default `fail_closed`, options: `fail_open|fail_closed`)
+- `RATE_LIMIT_REDIS_OUTAGE_POLICY_FORGOT` (default `fail_closed`, options: `fail_open|fail_closed`)
+- `RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_LOGIN` (default `fail_closed`, options: `fail_open|fail_closed`)
+- `RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_REFRESH` (default `fail_closed`, options: `fail_open|fail_closed`)
+- `RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_ADMIN_WRITE` (default `fail_closed`, options: `fail_open|fail_closed`)
+- `RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_ADMIN_SYNC` (default `fail_closed`, options: `fail_open|fail_closed`)
 - `AUTH_ABUSE_PROTECTION_ENABLED` (default `true`)
 - `AUTH_ABUSE_FREE_ATTEMPTS` (default `3`)
 - `AUTH_ABUSE_BASE_DELAY` (default `2s`)
@@ -474,6 +481,7 @@ OpenAPI spec:
 - RBAC is permission-based and enforced in route middleware.
 - RBAC permission checks use a short-lived user/session cache with invalidation on RBAC mutations.
 - Auth and API endpoints use hybrid token-bucket + sliding-window rate limiters.
+- Redis outage behavior for rate limiting is configurable per scope (`api`, `auth`, `forgot`, `route_login`, `route_refresh`, `route_admin_write`, `route_admin_sync`) via `RATE_LIMIT_REDIS_OUTAGE_POLICY_*`.
 - Rate-limited responses include `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` response headers.
 - Route policy map applies endpoint-specific sustained limits with burst capacity for:
   - login (`/api/v1/auth/local/login`)

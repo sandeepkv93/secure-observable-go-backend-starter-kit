@@ -1,0 +1,25 @@
+{
+  "gates": [
+    {
+      "name": "baseline",
+      "commands": [
+        "go test ./internal/http/middleware ./internal/di ./internal/config"
+      ],
+      "status": "passed"
+    },
+    {
+      "name": "targeted_post_change",
+      "commands": [
+        "go test ./internal/config ./internal/di ./internal/http/middleware"
+      ],
+      "status": "passed"
+    },
+    {
+      "name": "full_post_change",
+      "commands": [
+        "go test ./..."
+      ],
+      "status": "passed"
+    }
+  ]
+}

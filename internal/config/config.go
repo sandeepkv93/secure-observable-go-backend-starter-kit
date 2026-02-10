@@ -55,6 +55,13 @@ type Config struct {
 	RateLimitAdminSyncPerMin     int
 	RateLimitBurstMultiplier     float64
 	RateLimitSustainedWindow     time.Duration
+	RateLimitOutagePolicyAPI     string
+	RateLimitOutagePolicyAuth    string
+	RateLimitOutagePolicyForgot  string
+	RateLimitOutagePolicyLogin   string
+	RateLimitOutagePolicyRefresh string
+	RateLimitOutagePolicyAdminW  string
+	RateLimitOutagePolicyAdminS  string
 	AuthAbuseProtectionEnabled   bool
 	AuthAbuseFreeAttempts        int
 	AuthAbuseBaseDelay           time.Duration
@@ -163,6 +170,13 @@ func Load() (*Config, error) {
 		RateLimitAdminWritePerMin:         getEnvInt("RATE_LIMIT_ADMIN_WRITE_PER_MIN", 30),
 		RateLimitAdminSyncPerMin:          getEnvInt("RATE_LIMIT_ADMIN_SYNC_PER_MIN", 10),
 		RateLimitBurstMultiplier:          getEnvFloat("RATE_LIMIT_BURST_MULTIPLIER", 1.5),
+		RateLimitOutagePolicyAPI:          strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_REDIS_OUTAGE_POLICY_API", "fail_open"))),
+		RateLimitOutagePolicyAuth:         strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_REDIS_OUTAGE_POLICY_AUTH", "fail_closed"))),
+		RateLimitOutagePolicyForgot:       strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_REDIS_OUTAGE_POLICY_FORGOT", "fail_closed"))),
+		RateLimitOutagePolicyLogin:        strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_LOGIN", "fail_closed"))),
+		RateLimitOutagePolicyRefresh:      strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_REFRESH", "fail_closed"))),
+		RateLimitOutagePolicyAdminW:       strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_ADMIN_WRITE", "fail_closed"))),
+		RateLimitOutagePolicyAdminS:       strings.ToLower(strings.TrimSpace(getEnv("RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_ADMIN_SYNC", "fail_closed"))),
 		AuthAbuseProtectionEnabled:        getEnvBool("AUTH_ABUSE_PROTECTION_ENABLED", true),
 		AuthAbuseFreeAttempts:             getEnvInt("AUTH_ABUSE_FREE_ATTEMPTS", 3),
 		AuthAbuseMultiplier:               getEnvFloat("AUTH_ABUSE_MULTIPLIER", 2.0),
@@ -442,6 +456,27 @@ func (c *Config) Validate() error {
 	if c.RateLimitSustainedWindow < time.Second || c.RateLimitSustainedWindow > (15*time.Minute) {
 		errs = append(errs, "RATE_LIMIT_SUSTAINED_WINDOW must be between 1s and 15m")
 	}
+	if !isValidRateLimitOutagePolicy(c.RateLimitOutagePolicyAPI) {
+		errs = append(errs, "RATE_LIMIT_REDIS_OUTAGE_POLICY_API must be fail_open or fail_closed")
+	}
+	if !isValidRateLimitOutagePolicy(c.RateLimitOutagePolicyAuth) {
+		errs = append(errs, "RATE_LIMIT_REDIS_OUTAGE_POLICY_AUTH must be fail_open or fail_closed")
+	}
+	if !isValidRateLimitOutagePolicy(c.RateLimitOutagePolicyForgot) {
+		errs = append(errs, "RATE_LIMIT_REDIS_OUTAGE_POLICY_FORGOT must be fail_open or fail_closed")
+	}
+	if !isValidRateLimitOutagePolicy(c.RateLimitOutagePolicyLogin) {
+		errs = append(errs, "RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_LOGIN must be fail_open or fail_closed")
+	}
+	if !isValidRateLimitOutagePolicy(c.RateLimitOutagePolicyRefresh) {
+		errs = append(errs, "RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_REFRESH must be fail_open or fail_closed")
+	}
+	if !isValidRateLimitOutagePolicy(c.RateLimitOutagePolicyAdminW) {
+		errs = append(errs, "RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_ADMIN_WRITE must be fail_open or fail_closed")
+	}
+	if !isValidRateLimitOutagePolicy(c.RateLimitOutagePolicyAdminS) {
+		errs = append(errs, "RATE_LIMIT_REDIS_OUTAGE_POLICY_ROUTE_ADMIN_SYNC must be fail_open or fail_closed")
+	}
 	if c.AuthAbuseFreeAttempts < 0 || c.AuthAbuseFreeAttempts > 20 {
 		errs = append(errs, "AUTH_ABUSE_FREE_ATTEMPTS must be between 0 and 20")
 	}
@@ -635,6 +670,15 @@ func isLocalLikeEnv(env string) bool {
 func isValidLogLevel(v string) bool {
 	switch strings.ToLower(v) {
 	case "debug", "info", "warn", "error":
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidRateLimitOutagePolicy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "fail_open", "fail_closed":
 		return true
 	default:
 		return false

@@ -325,12 +325,13 @@ func provideGlobalRateLimiter(
 	keyFunc := middleware.SubjectOrIPKeyFunc(jwt)
 	policy := toRateLimitPolicy(cfg.APIRateLimitPerMin, cfg)
 	rateLimitPrefix := composeRedisPrefix(cfg.RedisKeyNamespace, cfg.RateLimitRedisPrefix)
+	outageMode := toRateLimitFailureMode(cfg.RateLimitOutagePolicyAPI, middleware.FailOpen)
 	if cfg.RateLimitRedisEnabled && redisClient != nil {
 		redisLimiter := middleware.NewRedisFixedWindowLimiter(redisClient, rateLimitPrefix+":api")
 		return middleware.NewDistributedRateLimiterWithKeyAndPolicy(
 			redisLimiter,
 			policy,
-			middleware.FailOpen,
+			outageMode,
 			"api",
 			keyFunc,
 		).WithBypassEvaluator(bypassEvaluator).Middleware()
@@ -345,12 +346,13 @@ func provideAuthRateLimiter(
 ) router.AuthRateLimiterFunc {
 	policy := toRateLimitPolicy(cfg.AuthRateLimitPerMin, cfg)
 	rateLimitPrefix := composeRedisPrefix(cfg.RedisKeyNamespace, cfg.RateLimitRedisPrefix)
+	outageMode := toRateLimitFailureMode(cfg.RateLimitOutagePolicyAuth, middleware.FailClosed)
 	if cfg.RateLimitRedisEnabled && redisClient != nil {
 		redisLimiter := middleware.NewRedisFixedWindowLimiter(redisClient, rateLimitPrefix+":auth")
 		return middleware.NewDistributedRateLimiterWithKeyAndPolicy(
 			redisLimiter,
 			policy,
-			middleware.FailClosed,
+			outageMode,
 			"auth",
 			nil,
 		).WithBypassEvaluator(bypassEvaluator).Middleware()
@@ -365,12 +367,13 @@ func provideForgotRateLimiter(
 ) router.ForgotRateLimiterFunc {
 	policy := toRateLimitPolicy(cfg.AuthPasswordForgotRateLimitPerMin, cfg)
 	rateLimitPrefix := composeRedisPrefix(cfg.RedisKeyNamespace, cfg.RateLimitRedisPrefix)
+	outageMode := toRateLimitFailureMode(cfg.RateLimitOutagePolicyForgot, middleware.FailClosed)
 	if cfg.RateLimitRedisEnabled && redisClient != nil {
 		redisLimiter := middleware.NewRedisFixedWindowLimiter(redisClient, rateLimitPrefix+":auth:forgot")
 		return middleware.NewDistributedRateLimiterWithKeyAndPolicy(
 			redisLimiter,
 			policy,
-			middleware.FailClosed,
+			outageMode,
 			"auth_password_forgot",
 			nil,
 		).WithBypassEvaluator(bypassEvaluator).Middleware()
@@ -390,7 +393,7 @@ func provideRouteRateLimitPolicies(
 		redisClient,
 		"route:login",
 		cfg.RateLimitLoginPerMin,
-		middleware.FailClosed,
+		toRateLimitFailureMode(cfg.RateLimitOutagePolicyLogin, middleware.FailClosed),
 		"route_login",
 		nil,
 		bypassEvaluator,
@@ -400,7 +403,7 @@ func provideRouteRateLimitPolicies(
 		redisClient,
 		"route:refresh",
 		cfg.RateLimitRefreshPerMin,
-		middleware.FailClosed,
+		toRateLimitFailureMode(cfg.RateLimitOutagePolicyRefresh, middleware.FailClosed),
 		"route_refresh",
 		middleware.SubjectOrIPKeyFunc(jwt),
 		bypassEvaluator,
@@ -411,7 +414,7 @@ func provideRouteRateLimitPolicies(
 		redisClient,
 		"route:admin:write",
 		cfg.RateLimitAdminWritePerMin,
-		middleware.FailClosed,
+		toRateLimitFailureMode(cfg.RateLimitOutagePolicyAdminW, middleware.FailClosed),
 		"route_admin_write",
 		subjectKey,
 		bypassEvaluator,
@@ -421,7 +424,7 @@ func provideRouteRateLimitPolicies(
 		redisClient,
 		"route:admin:sync",
 		cfg.RateLimitAdminSyncPerMin,
-		middleware.FailClosed,
+		toRateLimitFailureMode(cfg.RateLimitOutagePolicyAdminS, middleware.FailClosed),
 		"route_admin_sync",
 		subjectKey,
 		bypassEvaluator,
@@ -489,6 +492,17 @@ func toRateLimitPolicy(perMinute int, cfg *config.Config) middleware.RateLimitPo
 		SustainedWindow:   window,
 		BurstCapacity:     burstCapacity,
 		BurstRefillPerSec: refill,
+	}
+}
+
+func toRateLimitFailureMode(raw string, fallback middleware.FailureMode) middleware.FailureMode {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case string(middleware.FailOpen):
+		return middleware.FailOpen
+	case string(middleware.FailClosed):
+		return middleware.FailClosed
+	default:
+		return fallback
 	}
 }
 
