@@ -6,6 +6,7 @@ info:
 servers:
   - url: http://localhost:8080/api/v1
 tags:
+  - name: Health
   - name: Auth
   - name: User
   - name: Admin
@@ -692,6 +693,36 @@ components:
             $ref: '#/components/schemas/ProblemDetails'
 
 paths:
+  /health/live:
+    servers:
+      - url: http://localhost:8080
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      operationId: healthLive
+      responses:
+        '200':
+          description: Service process is alive
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /health/ready:
+    servers:
+      - url: http://localhost:8080
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      operationId: healthReady
+      responses:
+        '200':
+          description: Dependencies are ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableError'
+
   /auth/google/login:
     get:
       tags: [Auth]
