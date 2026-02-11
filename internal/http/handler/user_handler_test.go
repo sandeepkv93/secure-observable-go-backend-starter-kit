@@ -87,17 +87,6 @@ func withURLParam(r *http.Request, key, val string) *http.Request {
 	return r.WithContext(ctx)
 }
 
-func decodeUserErrCode(t *testing.T, rr *httptest.ResponseRecorder) string {
-	t.Helper()
-	var env map[string]any
-	if err := json.NewDecoder(rr.Body).Decode(&env); err != nil {
-		t.Fatalf("decode envelope: %v", err)
-	}
-	errObj, _ := env["error"].(map[string]any)
-	code, _ := errObj["code"].(string)
-	return code
-}
-
 func TestUserHandlerMeErrorMapping(t *testing.T) {
 	h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{})
 
