@@ -20,6 +20,7 @@ Non-scope:
 - App metric instrument namespace/meter: `secure-observable-go-backend-starter-kit`.
 - Redis metrics are enabled through `observability.InstrumentRedisClient` in `internal/di/providers.go` when a Redis client is created.
 - HTTP auto-metrics are enabled when router is wrapped with `otelhttp.NewHandler` (`internal/http/router/router.go`).
+- Catalog verification status: explicit metric declarations in code and documented metric rows are in sync (`49` metrics).
 
 ## Application Metrics (Explicit)
 
