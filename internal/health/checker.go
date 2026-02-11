@@ -2,7 +2,10 @@ package health
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/observability"
 )
 
 type CheckResult struct {
@@ -39,13 +42,20 @@ func (r *ProbeRunner) Ready(ctx context.Context) (bool, []CheckResult) {
 		return true, nil
 	}
 	if r.gracePeriod > 0 && time.Since(r.startedAt) < r.gracePeriod {
+		observability.RecordHealthCheckResult(ctx, "startup_grace", "unhealthy")
+		observability.RecordHealthCheckDuration(ctx, "startup_grace", 0)
 		return false, []CheckResult{{Name: "startup_grace", Healthy: false, Error: "startup grace period active"}}
 	}
 	results := make([]CheckResult, 0, len(r.checkers))
 	allHealthy := true
 	for _, c := range r.checkers {
 		checkCtx, cancel := context.WithTimeout(ctx, r.timeout)
+		start := time.Now()
 		res := c.Check(checkCtx)
+		duration := time.Since(start)
+		outcome := healthOutcome(checkCtx.Err(), res)
+		observability.RecordHealthCheckResult(ctx, res.Name, outcome)
+		observability.RecordHealthCheckDuration(ctx, res.Name, duration)
 		cancel()
 		results = append(results, res)
 		if !res.Healthy {
@@ -53,4 +63,14 @@ func (r *ProbeRunner) Ready(ctx context.Context) (bool, []CheckResult) {
 		}
 	}
 	return allHealthy, results
+}
+
+func healthOutcome(ctxErr error, res CheckResult) string {
+	if errors.Is(ctxErr, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	if res.Healthy {
+		return "healthy"
+	}
+	return "unhealthy"
 }

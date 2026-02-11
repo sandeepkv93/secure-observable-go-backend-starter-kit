@@ -39,6 +39,10 @@ Non-scope:
 | `session.revoked.count` | Histogram (float64) | 1 | `action` | `RecordSessionRevokedCount` calls in `internal/http/handler/user_handler.go` |
 | `user.profile.events` | Counter (int64) | 1 | `outcome` | `RecordUserProfileEvent` calls in `internal/http/handler/user_handler.go` |
 | `auth.local.flow.events` | Counter (int64) | 1 | `flow`, `outcome` | `RecordAuthLocalFlowEvent` calls in `internal/http/handler/auth_handler.go` |
+| `admin.list.request.duration` | Histogram (float64) | `s` | `endpoint`, `status` | `RecordAdminListRequestDuration` calls in `internal/http/handler/admin_handler.go` |
+| `admin.list.page_size` | Histogram (float64) | 1 | `endpoint` | `RecordAdminListPageSize` calls in `internal/http/handler/admin_handler.go` |
+| `health.check.results` | Counter (int64) | 1 | `check`, `outcome` | `RecordHealthCheckResult` calls in `internal/health/checker.go` |
+| `health.check.duration` | Histogram (float64) | `s` | `check` | `RecordHealthCheckDuration` calls in `internal/health/checker.go` |
 | `admin.rbac.mutations` | Counter (int64) | 1 | `entity`, `action`, `status` | `RecordAdminRBACMutation` calls in `internal/http/handler/admin_handler.go` |
 | `admin.list.cache.events` | Counter (int64) | 1 | `endpoint`, `outcome` | `RecordAdminListCacheEvent` calls in `internal/http/handler/admin_handler.go` |
 | `auth.rbac.permission.cache.events` | Counter (int64) | 1 | `outcome` | `RecordRBACPermissionCacheEvent` calls in `internal/http/middleware/rbac_middleware.go`, `internal/service/rbac_permission_resolver.go`, `internal/http/handler/admin_handler.go` |
@@ -98,6 +102,20 @@ Non-scope:
 `auth.local.flow.events`
 - `flow`: `verify_request`, `verify_confirm`, `password_forgot`, `password_reset`, `password_change`
 - `outcome` values used: `accepted`, `success`, `failure`, `not_enabled`, `invalid_token`, `weak_password`, `rate_limited`, `unauthorized`
+
+`admin.list.request.duration`
+- `endpoint`: `admin.users`, `admin.roles`, `admin.permissions`
+- `status`: `success`, `not_modified`, `bad_request`, `error`
+
+`admin.list.page_size`
+- `endpoint`: `admin.users`, `admin.roles`, `admin.permissions`
+
+`health.check.results`
+- `check` values currently emitted: `startup_grace`, `db`, `redis`
+- `outcome`: `healthy`, `unhealthy`, `timeout`
+
+`health.check.duration`
+- `check` values currently emitted: `startup_grace`, `db`, `redis`
 
 `admin.rbac.mutations`
 - `entity`: `user_role`, `role`, `permission`, `sync`
@@ -163,6 +181,7 @@ The exact auto-generated metric names are not hardcoded in this repository; they
 - `internal/http/handler/auth_handler.go`
 - `internal/http/handler/admin_handler.go`
 - `internal/http/handler/user_handler.go`
+- `internal/health/checker.go`
 - `internal/http/middleware/auth_middleware.go`
 - `internal/http/middleware/security_middleware.go`
 - `internal/http/middleware/rate_limit_middleware.go`

@@ -97,6 +97,12 @@ func NewAdminHandler(
 }
 
 func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	status := "success"
+	defer func() {
+		observability.RecordAdminListRequestDuration(r.Context(), "admin.users", status, time.Since(start))
+	}()
+
 	cacheNamespace := "admin.users.list"
 	cacheKey := h.adminListCacheKey(r, cacheNamespace)
 	if cachedData, ok := h.readAdminListCache(r, cacheNamespace, cacheKey); ok {
@@ -106,9 +112,11 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	pageReq, err := parsePageRequest(r)
 	if err != nil {
+		status = "bad_request"
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
 		return
 	}
+	observability.RecordAdminListPageSize(r.Context(), "admin.users", pageReq.PageSize)
 	sortBy, sortOrder, err := parseSortParams(r, "created_at", map[string]struct{}{
 		"id":            {},
 		"created_at":    {},
@@ -119,6 +127,7 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		"last_login_at": {},
 	})
 	if err != nil {
+		status = "bad_request"
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
 		return
 	}
@@ -150,11 +159,13 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "error")
+		status = "error"
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list users", nil)
 		return
 	}
 	payload, ok := result.(map[string]any)
 	if !ok {
+		status = "error"
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to encode response", nil)
 		return
 	}
@@ -196,18 +207,26 @@ func (h *AdminHandler) SetUserRoles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	status := "success"
+	defer func() {
+		observability.RecordAdminListRequestDuration(r.Context(), "admin.roles", status, time.Since(start))
+	}()
+
 	cacheNamespace := "admin.roles.list"
 	cacheKey := h.adminListCacheKey(r, cacheNamespace)
 	if cachedData, ok := h.readAdminListCache(r, cacheNamespace, cacheKey); ok {
-		h.respondAdminListWithConditionalETag(w, r, cacheNamespace, nil, cachedData)
+		status = h.respondAdminListWithConditionalETag(w, r, cacheNamespace, nil, cachedData)
 		return
 	}
 
 	pageReq, err := parsePageRequest(r)
 	if err != nil {
+		status = "bad_request"
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
 		return
 	}
+	observability.RecordAdminListPageSize(r.Context(), "admin.roles", pageReq.PageSize)
 	sortBy, sortOrder, err := parseSortParams(r, "created_at", map[string]struct{}{
 		"id":         {},
 		"created_at": {},
@@ -215,6 +234,7 @@ func (h *AdminHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 		"name":       {},
 	})
 	if err != nil {
+		status = "bad_request"
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
 		return
 	}
@@ -236,15 +256,17 @@ func (h *AdminHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "error")
+		status = "error"
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list roles", nil)
 		return
 	}
 	payload, ok := result.(map[string]any)
 	if !ok {
+		status = "error"
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to encode response", nil)
 		return
 	}
-	h.respondAdminListWithConditionalETag(w, r, cacheNamespace, payload, nil)
+	status = h.respondAdminListWithConditionalETag(w, r, cacheNamespace, payload, nil)
 }
 
 func (h *AdminHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
@@ -483,18 +505,26 @@ func (h *AdminHandler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) ListPermissions(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	status := "success"
+	defer func() {
+		observability.RecordAdminListRequestDuration(r.Context(), "admin.permissions", status, time.Since(start))
+	}()
+
 	cacheNamespace := "admin.permissions.list"
 	cacheKey := h.adminListCacheKey(r, cacheNamespace)
 	if cachedData, ok := h.readAdminListCache(r, cacheNamespace, cacheKey); ok {
-		h.respondAdminListWithConditionalETag(w, r, cacheNamespace, nil, cachedData)
+		status = h.respondAdminListWithConditionalETag(w, r, cacheNamespace, nil, cachedData)
 		return
 	}
 
 	pageReq, err := parsePageRequest(r)
 	if err != nil {
+		status = "bad_request"
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
 		return
 	}
+	observability.RecordAdminListPageSize(r.Context(), "admin.permissions", pageReq.PageSize)
 	sortBy, sortOrder, err := parseSortParams(r, "created_at", map[string]struct{}{
 		"id":         {},
 		"created_at": {},
@@ -503,6 +533,7 @@ func (h *AdminHandler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 		"action":     {},
 	})
 	if err != nil {
+		status = "bad_request"
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
 		return
 	}
@@ -525,15 +556,17 @@ func (h *AdminHandler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		observability.RecordAdminListCacheEvent(r.Context(), cacheNamespace, "error")
+		status = "error"
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to list permissions", nil)
 		return
 	}
 	payload, ok := result.(map[string]any)
 	if !ok {
+		status = "error"
 		response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to encode response", nil)
 		return
 	}
-	h.respondAdminListWithConditionalETag(w, r, cacheNamespace, payload, nil)
+	status = h.respondAdminListWithConditionalETag(w, r, cacheNamespace, payload, nil)
 }
 
 func (h *AdminHandler) CreatePermission(w http.ResponseWriter, r *http.Request) {
@@ -1131,7 +1164,7 @@ func normalizeQueryValues(values url.Values) string {
 	return clone.Encode()
 }
 
-func (h *AdminHandler) respondAdminListWithConditionalETag(w http.ResponseWriter, r *http.Request, namespace string, payload any, encodedPayload []byte) {
+func (h *AdminHandler) respondAdminListWithConditionalETag(w http.ResponseWriter, r *http.Request, namespace string, payload any, encodedPayload []byte) string {
 	encoded := encodedPayload
 	if len(encoded) == 0 {
 		var err error
@@ -1139,7 +1172,7 @@ func (h *AdminHandler) respondAdminListWithConditionalETag(w http.ResponseWriter
 		if err != nil {
 			observability.RecordAdminListCacheEvent(r.Context(), namespace, "encode_error")
 			response.Error(w, r, http.StatusInternalServerError, "INTERNAL", "failed to encode response", nil)
-			return
+			return "error"
 		}
 	}
 
@@ -1149,15 +1182,16 @@ func (h *AdminHandler) respondAdminListWithConditionalETag(w http.ResponseWriter
 	if matchesIfNoneMatch(r.Header.Get("If-None-Match"), etag) {
 		observability.RecordAdminListCacheEvent(r.Context(), namespace, "etag_not_modified")
 		w.WriteHeader(http.StatusNotModified)
-		return
+		return "not_modified"
 	}
 
 	observability.RecordAdminListCacheEvent(r.Context(), namespace, "etag_ok")
 	if payload != nil {
 		response.JSON(w, r, http.StatusOK, payload)
-		return
+		return "success"
 	}
 	response.JSON(w, r, http.StatusOK, json.RawMessage(encoded))
+	return "success"
 }
 
 func buildStrongETag(payload []byte) string {

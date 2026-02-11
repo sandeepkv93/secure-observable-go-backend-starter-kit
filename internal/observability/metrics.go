@@ -38,6 +38,10 @@ type AppMetrics struct {
 	sessionRevokedCount          metric.Float64Histogram
 	userProfileCounter           metric.Int64Counter
 	authLocalFlowCounter         metric.Int64Counter
+	adminListReqDuration         metric.Float64Histogram
+	adminListPageSize            metric.Float64Histogram
+	healthCheckResultCounter     metric.Int64Counter
+	healthCheckDuration          metric.Float64Histogram
 }
 
 var (
@@ -176,6 +180,33 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 	if err != nil {
 		return nil, err
 	}
+	adminListReqDuration, err := meter.Float64Histogram(
+		"admin.list.request.duration",
+		metric.WithUnit("s"),
+		metric.WithDescription("Duration of admin list endpoint requests in seconds"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	adminListPageSize, err := meter.Float64Histogram(
+		"admin.list.page_size",
+		metric.WithDescription("Requested page size for admin list endpoints"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	healthCheckResultCounter, err := meter.Int64Counter("health.check.results")
+	if err != nil {
+		return nil, err
+	}
+	healthCheckDuration, err := meter.Float64Histogram(
+		"health.check.duration",
+		metric.WithUnit("s"),
+		metric.WithDescription("Duration of health dependency checks in seconds"),
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	metricsMu.Lock()
 	appMetrics = &AppMetrics{
@@ -198,6 +229,10 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 		sessionRevokedCount:          sessionRevokedCount,
 		userProfileCounter:           userProfileCounter,
 		authLocalFlowCounter:         authLocalFlowCounter,
+		adminListReqDuration:         adminListReqDuration,
+		adminListPageSize:            adminListPageSize,
+		healthCheckResultCounter:     healthCheckResultCounter,
+		healthCheckDuration:          healthCheckDuration,
 	}
 	metricsMu.Unlock()
 
@@ -453,5 +488,55 @@ func RecordAuthLocalFlowEvent(ctx context.Context, flow, outcome string) {
 	m.authLocalFlowCounter.Add(ctx, 1, metric.WithAttributes(
 		attribute.String("flow", flow),
 		attribute.String("outcome", outcome),
+	))
+}
+
+func RecordAdminListRequestDuration(ctx context.Context, endpoint, status string, duration time.Duration) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.adminListReqDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(
+		attribute.String("endpoint", endpoint),
+		attribute.String("status", status),
+	))
+}
+
+func RecordAdminListPageSize(ctx context.Context, endpoint string, pageSize int) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.adminListPageSize.Record(ctx, float64(pageSize), metric.WithAttributes(
+		attribute.String("endpoint", endpoint),
+	))
+}
+
+func RecordHealthCheckResult(ctx context.Context, check, outcome string) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.healthCheckResultCounter.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("check", check),
+		attribute.String("outcome", outcome),
+	))
+}
+
+func RecordHealthCheckDuration(ctx context.Context, check string, duration time.Duration) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.healthCheckDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(
+		attribute.String("check", check),
 	))
 }
