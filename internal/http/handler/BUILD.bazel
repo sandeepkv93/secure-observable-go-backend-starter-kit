@@ -1,4 +1,4 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "handler",
@@ -22,5 +22,25 @@ go_library(
         "@com_github_go_chi_chi_v5//:chi",
         "@io_gorm_gorm//:gorm",
         "@org_golang_x_sync//singleflight",
+    ],
+)
+
+go_test(
+    name = "handler_test",
+    srcs = [
+        "admin_handler_test.go",
+        "auth_handler_test.go",
+        "user_handler_test.go",
+    ],
+    embed = [":handler"],
+    deps = [
+        "//internal/config",
+        "//internal/domain",
+        "//internal/http/middleware",
+        "//internal/repository",
+        "//internal/security",
+        "//internal/service",
+        "@com_github_go_chi_chi_v5//:chi",
+        "@io_gorm_gorm//:gorm",
     ],
 )

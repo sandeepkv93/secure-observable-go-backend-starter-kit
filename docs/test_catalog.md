@@ -4,11 +4,11 @@ Generated from repository test sources (`*_test.go`) and test function declarati
 
 ## Summary
 
-- Total test files: 45
-- Unit test files: 27
+- Total test files: 48
+- Unit test files: 30
 - Integration test files: 18
-- Total test functions: 164
-- Unit test functions: 116
+- Total test functions: 177
+- Unit test functions: 129
 - Integration test functions: 48
 
 ## Unit Tests
@@ -31,6 +31,12 @@ Generated from repository test sources (`*_test.go`) and test function declarati
   - `TestRequirePermissionDenied`, `TestRequirePermissionResolverError`, `TestRequirePermissionAllowed`
 - `internal/http/middleware/security_middleware_test.go`
   - `TestCSRFMiddlewareRejectsMismatch`, `TestCORSAllowsKnownOrigin`, `TestCSRFMiddlewareAllowsMatchingToken`, `TestCSRFPathGroup`, `TestCORSRejectsUnknownOrigin`, `TestCORSPreflight`, `TestCSRFMiddlewareRejectsMissingCookie`, `TestBodyLimitAllowsSmallPayload`, `TestBodyLimitRejectsLargePayload`
+- `internal/http/handler/admin_handler_test.go`
+  - `TestAdminHandlerConditionalETag304`, `TestAdminHandlerNegativeLookupStaleFalsePositiveRoleUpdate`, `TestAdminHandlerMutationCacheInvalidation`, `TestAdminHandlerLockoutHelpersAndListParserFailures`
+- `internal/http/handler/auth_handler_test.go`
+  - `TestAuthHandlerLocalChangePasswordBranchesAndCookieSideEffects`, `TestAuthHandlerBypassAndLocalFlowErrorMappings`, `TestAuthHandlerRefreshAndLogoutCookieSideEffects`
+- `internal/http/handler/user_handler_test.go`
+  - `TestUserHandlerMeErrorMapping`, `TestUserHandlerSessionsResolveFallbackAndErrors`, `TestUserHandlerRevokeSessionMatrix`, `TestUserHandlerRevokeOtherSessionsMatrix`, `TestAuthUserIDAndClaimsParseError`, `TestSessionViewJSONShapeSmoke`
 - `internal/http/response/response_test.go`
   - `TestError_DefaultEnvelopeWhenProblemNotRequested`, `TestError_ProblemDetailsWhenRequested`, `TestError_ContentNegotiationVariants`, `TestError_StatusTypeCodeConsistencyForKeyStatuses`
 - `internal/observability/audit_test.go`
@@ -110,6 +116,7 @@ Generated from repository test sources (`*_test.go`) and test function declarati
 ## Bazel go_test Targets
 
 - `internal/http/middleware/BUILD.bazel`: name = "middleware_test",
+- `internal/http/handler/BUILD.bazel`: name = "handler_test",
 - `internal/http/response/BUILD.bazel`: name = "response_test",
 - `internal/health/BUILD.bazel`: name = "health_test",
 - `internal/repository/BUILD.bazel`: name = "repository_test",

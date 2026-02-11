@@ -11,10 +11,10 @@ This gap analysis covers the full repository (all `internal/**`, `cmd/**`, and `
 
 Current baseline from catalog:
 
-- Test files: 45
-- Unit test files: 27
+- Test files: 48
+- Unit test files: 30
 - Integration test files: 18
-- Declared test functions: 164
+- Declared test functions: 177
 
 ## High-Level Coverage Posture
 
@@ -29,44 +29,13 @@ Strong coverage already exists for:
 
 Most meaningful gaps are concentrated in:
 
-- Handler branch matrices (especially admin mutations)
-- Service business logic (`AuthService`, `SessionService`, `UserService`)
+- Service business logic (`SessionService`, `UserService`)
 - Repository CRUD/filter/sort semantics (except session repository)
 - Redis-backed cache/guard/store implementations (direct unit tests)
 - Router and health endpoint behavior
 - CLI/tooling and startup wiring smoke paths
 
 ## P1 Gaps (Important)
-
-### 5) Handler-level branch/unit coverage gaps
-
-#### `internal/http/handler/auth_handler.go`
-
-Missing scenarios:
-
-- `LocalChangePassword` success/error mapping across credentials and auth context conditions.
-- Abuse bypass conditions (`trusted_subnet`, trusted actor) and fallback behavior.
-- Verify/forgot/reset payload parse failures and service error classification branches.
-- Cookie/header side effects for refresh/logout/change-password branches.
-
-#### `internal/http/handler/user_handler.go`
-
-Missing scenarios:
-
-- `Me` user-service error mapping.
-- `Sessions` current-session resolve fallback semantics and repo-not-found behavior.
-- `RevokeSession` parse error vs not-found vs already-revoked vs success.
-- `RevokeOtherSessions` unauthorized/resolve error/internal error branches.
-
-#### `internal/http/handler/admin_handler.go`
-
-Missing scenarios:
-
-- Conditional ETag 304 branch validation with exact cache payload hash.
-- Negative lookup cache false-positive handling (`stale_false_positive`).
-- Cache invalidation on each mutation type.
-- Lockout-protection helper logic (`wouldLockOut*`) across role/permission combinations.
-- Sort/filter/page parser failure combinations across admin list endpoints.
 
 ### 6) Router and health endpoint behavior (integration + unit)
 
@@ -162,16 +131,13 @@ Note:
 
 ## Recommended Implementation Sequence
 
-1. P1-5/6: Add user/admin/auth handler unit tests and health/router integration tests.
+1. P1-6: Add health/router integration and unit tests.
 2. P1-7/8: Fill repository and Redis-store unit tests.
 3. P1-9/10 and P2: Observability/security/tooling hardening coverage.
 
 ## Concrete New Test Files to Add
 
 - `test/integration/health_endpoints_test.go`
-- `internal/http/handler/auth_handler_test.go`
-- `internal/http/handler/user_handler_test.go`
-- `internal/http/handler/admin_handler_test.go`
 - `internal/http/router/router_test.go`
 - `internal/repository/user_repository_test.go`
 - `internal/repository/role_repository_test.go`
