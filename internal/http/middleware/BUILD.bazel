@@ -29,13 +29,18 @@ go_test(
     name = "middleware_test",
     srcs = [
         "auth_middleware_test.go",
+        "bypass_policy_test.go",
         "idempotency_middleware_test.go",
         "rate_limit_middleware_test.go",
+        "rate_limit_redis_test.go",
         "rbac_middleware_test.go",
+        "request_logging_middleware_test.go",
         "security_middleware_test.go",
     ],
     embed = [":middleware"],
     deps = [
+        "@com_github_alicebob_miniredis_v2//:miniredis",
+        "@com_github_redis_go_redis_v9//:go-redis",
         "//internal/security",
         "//internal/service",
         "@com_github_go_chi_chi_v5//:chi",

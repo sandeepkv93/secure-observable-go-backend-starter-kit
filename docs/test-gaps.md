@@ -11,10 +11,10 @@ This gap analysis covers the full repository (all `internal/**`, `cmd/**`, and `
 
 Current baseline from catalog:
 
-- Test files: 68
-- Unit test files: 49
+- Test files: 72
+- Unit test files: 53
 - Integration test files: 19
-- Declared test functions: 213
+- Declared test functions: 225
 
 ## High-Level Coverage Posture
 
@@ -29,23 +29,12 @@ Strong coverage already exists for:
 - Repository CRUD/filter/sort semantics for user/role/permission/local credential/verification token/oauth/session layers
 - Redis-backed cache/guard/store semantics for admin-list, negative lookup, auth abuse, idempotency, and RBAC permission caches
 - Observability helpers for metrics emission, logging trace-context enrichment, tracing init, and runtime startup/shutdown branches
+- Security/middleware adjunct branches covering cookie semantics, bypass policy edges, request logging fields, and Redis limiter adapter behavior
 
 Most meaningful gaps are concentrated in:
 
 - Service business logic (`SessionService`, `UserService`)
-- Security and middleware adjuncts with sparse edge-path coverage
 - CLI/tooling and startup wiring smoke paths
-
-## P1 Gaps (Important)
-
-### 10) Security and middleware adjunct gaps (unit)
-
-Missing scenarios:
-
-- `security/cookie.go`: secure/samesite/domain cookie flags and clear-token semantics.
-- `middleware/bypass_policy.go`: trusted CIDR parsing failures, actor bypass list behavior, method/path classification.
-- `middleware/request_logging_middleware.go`: status/error logging fields and duration boundaries.
-- `middleware/rate_limit_redis.go`: redis backend failure vs allow/deny policy semantics.
 
 ## P2 Gaps (Useful but Lower Immediate Risk)
 
@@ -82,15 +71,15 @@ Note:
 
 ## Recommended Implementation Sequence
 
-1. P1-10: Security/middleware adjunct unit tests.
-2. P2: Database/startup/tooling hardening coverage.
+1. P2: Database/startup/tooling hardening coverage.
+2. P2: Consider focused `SessionService`/`UserService` unit test expansion.
 
 ## Concrete New Test Files to Add
 
-- `internal/security/cookie_test.go`
-- `internal/http/middleware/bypass_policy_test.go`
-- `internal/http/middleware/request_logging_middleware_test.go`
-- `internal/http/middleware/rate_limit_redis_test.go`
+- `internal/database/postgres_test.go`
+- `internal/database/migrate_test.go`
+- `internal/database/seed_test.go`
+- `internal/app/app_test.go`
 
 ## Assumptions and Unknowns
 

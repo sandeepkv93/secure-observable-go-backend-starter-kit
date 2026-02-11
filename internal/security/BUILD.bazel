@@ -21,6 +21,7 @@ go_library(
 go_test(
     name = "security_test",
     srcs = [
+        "cookie_test.go",
         "jwt_test.go",
         "password_test.go",
         "state_test.go",

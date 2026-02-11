@@ -4,11 +4,11 @@ Generated from repository test sources (`*_test.go`) and test function declarati
 
 ## Summary
 
-- Total test files: 68
-- Unit test files: 49
+- Total test files: 72
+- Unit test files: 53
 - Integration test files: 19
-- Total test functions: 213
-- Unit test functions: 164
+- Total test functions: 225
+- Unit test functions: 176
 - Integration test functions: 49
 
 ## Unit Tests
@@ -23,12 +23,18 @@ Generated from repository test sources (`*_test.go`) and test function declarati
   - `TestProbeRunnerReady`, `TestProbeRunnerUnready`, `TestProbeRunnerStartupGrace`, `TestHealthOutcome`
 - `internal/http/middleware/auth_middleware_test.go`
   - `TestAuthMiddlewareMissingTokenReturnsUnauthorized`, `TestAuthMiddlewareValidBearerTokenPasses`
+- `internal/http/middleware/bypass_policy_test.go`
+  - `TestNewRequestBypassEvaluatorIgnoresInvalidCIDRsAndCanReturnNil`, `TestRequestBypassEvaluatorMethodPathAndNilRequest`, `TestRequestBypassEvaluatorTrustedSubjectNormalizationAndFallback`
 - `internal/http/middleware/idempotency_middleware_test.go`
   - `TestIdempotencyMiddlewareRejectsMissingAndTooLongKey`, `TestIdempotencyMiddlewareRejectsUnreadableBody`, `TestIdempotencyMiddlewareBeginErrorReturnsInternal`, `TestIdempotencyMiddlewareBeginStateBranches`, `TestIdempotencyMiddlewareCompleteBehavior`, `TestIdempotencyFingerprintUsesRoutePatternAndActorIdentity`
 - `internal/http/middleware/rate_limit_middleware_test.go`
   - `TestDistributedRateLimiterAllowedSetsRateLimitHeaders`, `TestSubjectOrIPKeyFuncUsesSubjectWhenAccessTokenValid`, `TestSubjectOrIPKeyFuncFallsBackToIPWhenTokenInvalid`, `TestRateLimiterWithPolicyBurstThenSustained`, `TestRequestBypassEvaluatorProbePath`, `TestRequestBypassEvaluatorTrustedCIDR`, `TestRequestBypassEvaluatorTrustedSubject`, `TestRateLimiterBypassSkipsLimiter`, `TestRateLimitKeyType`, `TestDistributedRateLimiterFailOpenOnBackendError`, `TestDistributedRateLimiterFailClosedOnBackendError`, `TestDistributedRateLimiterDeniedSetsRetryAfter`
+- `internal/http/middleware/rate_limit_redis_test.go`
+  - `TestRedisFixedWindowLimiterAllowDenyAndFallbackKey`, `TestRedisFixedWindowLimiterBackendAndNilClientErrors`, `TestParseRedisInt64Branches`
 - `internal/http/middleware/rbac_middleware_test.go`
   - `TestRequirePermissionDenied`, `TestRequirePermissionResolverError`, `TestRequirePermissionAllowed`
+- `internal/http/middleware/request_logging_middleware_test.go`
+  - `TestStructuredRequestLoggerInfoAndErrorLevels`, `TestStructuredRequestLoggerStatusFallbackTo200`
 - `internal/http/middleware/security_middleware_test.go`
   - `TestCSRFMiddlewareRejectsMismatch`, `TestCORSAllowsKnownOrigin`, `TestCSRFMiddlewareAllowsMatchingToken`, `TestCSRFPathGroup`, `TestCORSRejectsUnknownOrigin`, `TestCORSPreflight`, `TestCSRFMiddlewareRejectsMissingCookie`, `TestBodyLimitAllowsSmallPayload`, `TestBodyLimitRejectsLargePayload`
 - `internal/http/handler/admin_handler_test.go`
@@ -71,6 +77,8 @@ Generated from repository test sources (`*_test.go`) and test function declarati
   - `TestVerificationTokenRepositoryInvalidateFindConsume`, `TestVerificationTokenRepositoryConsumeIdempotencyAndConcurrency`
 - `internal/security/jwt_test.go`
   - `TestJWTAccessAndRefreshParsing`
+- `internal/security/cookie_test.go`
+  - `TestNewCookieManagerSameSiteMapping`, `TestCookieManagerSetTokenCookiesFlagsAndPaths`, `TestCookieManagerClearTokenCookies`, `TestGetCookie`
 - `internal/security/password_test.go`
   - `TestHashAndVerifyPassword`
 - `internal/security/state_test.go`
