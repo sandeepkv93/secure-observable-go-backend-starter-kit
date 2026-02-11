@@ -6,6 +6,57 @@ import (
 	"testing"
 )
 
+func TestCORSAllowsKnownOrigin(t *testing.T) {
+	h := CORS([]string{"https://app.example.com"})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://app.example.com" {
+		t.Fatalf("expected allow-origin header for trusted origin, got %q", got)
+	}
+}
+
+func TestCORSRejectsUnknownOrigin(t *testing.T) {
+	h := CORS([]string{"https://app.example.com"})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Origin", "https://evil.example.com")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("expected no allow-origin header for unknown origin, got %q", got)
+	}
+}
+
+func TestCORSPreflight(t *testing.T) {
+	h := CORS([]string{"https://app.example.com"})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("expected preflight to short-circuit")
+	}))
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/me", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 for preflight, got %d", rr.Code)
+	}
+}
+
 func TestCSRFMiddlewareRejectsMissingCookie(t *testing.T) {
 	h := CSRFMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

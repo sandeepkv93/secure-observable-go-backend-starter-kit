@@ -36,14 +36,18 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 			origin := r.Header.Get("Origin")
 			if origin != "" {
 				if _, ok := allowed[origin]; ok {
+					observability.RecordMiddlewareValidationEvent(r.Context(), "cors", "allow_origin")
 					w.Header().Set("Access-Control-Allow-Origin", origin)
 					w.Header().Set("Vary", "Origin")
+				} else {
+					observability.RecordMiddlewareValidationEvent(r.Context(), "cors", "rejected_origin")
 				}
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
 				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
 			}
 			if r.Method == http.MethodOptions {
+				observability.RecordMiddlewareValidationEvent(r.Context(), "cors", "preflight")
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}

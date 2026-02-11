@@ -56,6 +56,7 @@ type AppMetrics struct {
 	rbacAuthorizationCounter     metric.Int64Counter
 	securityBypassCounter        metric.Int64Counter
 	adminRBACSyncReport          metric.Float64Histogram
+	httpMiddlewareValidation     metric.Int64Counter
 }
 
 var (
@@ -295,6 +296,10 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 	if err != nil {
 		return nil, err
 	}
+	httpMiddlewareValidation, err := meter.Int64Counter("http.middleware.validation.events")
+	if err != nil {
+		return nil, err
+	}
 
 	metricsMu.Lock()
 	appMetrics = &AppMetrics{
@@ -335,6 +340,7 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 		rbacAuthorizationCounter:     rbacAuthorizationCounter,
 		securityBypassCounter:        securityBypassCounter,
 		adminRBACSyncReport:          adminRBACSyncReport,
+		httpMiddlewareValidation:     httpMiddlewareValidation,
 	}
 	metricsMu.Unlock()
 
@@ -818,5 +824,18 @@ func RecordAdminRBACSyncReport(ctx context.Context, field string, value float64)
 	}
 	m.adminRBACSyncReport.Record(ctx, value, metric.WithAttributes(
 		attribute.String("field", field),
+	))
+}
+
+func RecordMiddlewareValidationEvent(ctx context.Context, middleware, outcome string) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.httpMiddlewareValidation.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("middleware", middleware),
+		attribute.String("outcome", outcome),
 	))
 }

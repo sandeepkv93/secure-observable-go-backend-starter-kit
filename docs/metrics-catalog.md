@@ -55,6 +55,7 @@ Non-scope:
 | `loadgen.requests` | Counter (int64) | 1 | `status_class`, `profile` | `RecordLoadgenRequest` calls in `internal/tools/loadgen/run.go` |
 | `obscheck.stage.events` | Counter (int64) | 1 | `stage`, `outcome` | `RecordObscheckStageEvent` calls in `internal/tools/obscheck/command.go` |
 | `security.bypass.events` | Counter (int64) | 1 | `reason`, `scope` | `RecordSecurityBypassEvent` calls in `internal/http/middleware/rate_limit_middleware.go`, `internal/http/handler/auth_handler.go` |
+| `http.middleware.validation.events` | Counter (int64) | 1 | `middleware`, `outcome` | `RecordMiddlewareValidationEvent` calls in `internal/http/middleware/security_middleware.go` |
 | `admin.rbac.sync.report` | Histogram (float64) | 1 | `field` | `RecordAdminRBACSyncReport` calls in `internal/http/handler/admin_handler.go` |
 | `admin.rbac.mutations` | Counter (int64) | 1 | `entity`, `action`, `status` | `RecordAdminRBACMutation` calls in `internal/http/handler/admin_handler.go` |
 | `admin.list.cache.events` | Counter (int64) | 1 | `endpoint`, `outcome` | `RecordAdminListCacheEvent` calls in `internal/http/handler/admin_handler.go` |
@@ -177,6 +178,10 @@ Non-scope:
 `security.bypass.events`
 - `reason` values include: `internal_probe_path`, `trusted_actor_cidr`, `trusted_actor_subject`, `unspecified`
 - `scope` values include: rate limiter scopes (for example `api`, `auth`, `admin_read`) and auth abuse scopes (`auth.login`, `auth.password_forgot`)
+
+`http.middleware.validation.events`
+- `middleware` currently emitted: `cors`
+- `outcome` values currently emitted: `allow_origin`, `rejected_origin`, `preflight`
 
 `admin.rbac.sync.report`
 - `field` values: `created_permissions`, `created_roles`, `bound_permissions`, `noop`
