@@ -11,10 +11,10 @@ This gap analysis covers the full repository (all `internal/**`, `cmd/**`, and `
 
 Current baseline from catalog:
 
-- Test files: 44
-- Unit test files: 26
+- Test files: 45
+- Unit test files: 27
 - Integration test files: 18
-- Declared test functions: 158
+- Declared test functions: 164
 
 ## High-Level Coverage Posture
 
@@ -35,29 +35,6 @@ Most meaningful gaps are concentrated in:
 - Redis-backed cache/guard/store implementations (direct unit tests)
 - Router and health endpoint behavior
 - CLI/tooling and startup wiring smoke paths
-
-## P0 Gaps (Highest Risk)
-
-### 1) Idempotency middleware branch coverage is incomplete (unit)
-
-Current state:
-
-- Integration covers happy path replay and Redis race behavior.
-- No direct unit tests for middleware branches.
-
-Missing scenarios:
-
-- Missing/too-long key rejection.
-- Request body read failure handling.
-- Store `Begin` error -> `500` path.
-- `InProgress`/`Conflict`/`Replay` branches (especially `X-Idempotency-Replayed` and content-type replay fidelity).
-- `5xx` downstream behavior should not persist completion.
-- `Complete` failure should not fail request but should emit failure signal.
-- Fingerprint behavior with route patterns vs raw paths; actor derivation by claims vs IP.
-
-Why P0:
-
-- Middleware correctness is central to replay safety and side-effect suppression.
 
 ## P1 Gaps (Important)
 
@@ -185,15 +162,13 @@ Note:
 
 ## Recommended Implementation Sequence
 
-1. P0-1: Add `internal/http/middleware/idempotency_middleware_test.go` for complete idempotency branch matrix.
-3. P1-5/6: Add user/admin/auth handler unit tests and health/router integration tests.
-4. P1-7/8: Fill repository and Redis-store unit tests.
-5. P1-9/10 and P2: Observability/security/tooling hardening coverage.
+1. P1-5/6: Add user/admin/auth handler unit tests and health/router integration tests.
+2. P1-7/8: Fill repository and Redis-store unit tests.
+3. P1-9/10 and P2: Observability/security/tooling hardening coverage.
 
 ## Concrete New Test Files to Add
 
 - `test/integration/health_endpoints_test.go`
-- `internal/http/middleware/idempotency_middleware_test.go`
 - `internal/http/handler/auth_handler_test.go`
 - `internal/http/handler/user_handler_test.go`
 - `internal/http/handler/admin_handler_test.go`

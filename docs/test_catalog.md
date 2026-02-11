@@ -4,11 +4,11 @@ Generated from repository test sources (`*_test.go`) and test function declarati
 
 ## Summary
 
-- Total test files: 44
-- Unit test files: 26
+- Total test files: 45
+- Unit test files: 27
 - Integration test files: 18
-- Total test functions: 158
-- Unit test functions: 110
+- Total test functions: 164
+- Unit test functions: 116
 - Integration test functions: 48
 
 ## Unit Tests
@@ -23,6 +23,8 @@ Generated from repository test sources (`*_test.go`) and test function declarati
   - `TestProbeRunnerReady`, `TestProbeRunnerUnready`, `TestProbeRunnerStartupGrace`, `TestHealthOutcome`
 - `internal/http/middleware/auth_middleware_test.go`
   - `TestAuthMiddlewareMissingTokenReturnsUnauthorized`, `TestAuthMiddlewareValidBearerTokenPasses`
+- `internal/http/middleware/idempotency_middleware_test.go`
+  - `TestIdempotencyMiddlewareRejectsMissingAndTooLongKey`, `TestIdempotencyMiddlewareRejectsUnreadableBody`, `TestIdempotencyMiddlewareBeginErrorReturnsInternal`, `TestIdempotencyMiddlewareBeginStateBranches`, `TestIdempotencyMiddlewareCompleteBehavior`, `TestIdempotencyFingerprintUsesRoutePatternAndActorIdentity`
 - `internal/http/middleware/rate_limit_middleware_test.go`
   - `TestDistributedRateLimiterAllowedSetsRateLimitHeaders`, `TestSubjectOrIPKeyFuncUsesSubjectWhenAccessTokenValid`, `TestSubjectOrIPKeyFuncFallsBackToIPWhenTokenInvalid`, `TestRateLimiterWithPolicyBurstThenSustained`, `TestRequestBypassEvaluatorProbePath`, `TestRequestBypassEvaluatorTrustedCIDR`, `TestRequestBypassEvaluatorTrustedSubject`, `TestRateLimiterBypassSkipsLimiter`, `TestRateLimitKeyType`, `TestDistributedRateLimiterFailOpenOnBackendError`, `TestDistributedRateLimiterFailClosedOnBackendError`, `TestDistributedRateLimiterDeniedSetsRetryAfter`
 - `internal/http/middleware/rbac_middleware_test.go`

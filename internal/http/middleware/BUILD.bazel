@@ -29,6 +29,7 @@ go_test(
     name = "middleware_test",
     srcs = [
         "auth_middleware_test.go",
+        "idempotency_middleware_test.go",
         "rate_limit_middleware_test.go",
         "rbac_middleware_test.go",
         "security_middleware_test.go",
