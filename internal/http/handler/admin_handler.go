@@ -777,6 +777,14 @@ func (h *AdminHandler) SyncRBAC(w http.ResponseWriter, r *http.Request) {
 		Reason:      "seed_reconciled",
 	}, "report", report)
 	observability.RecordAdminRBACMutation(r.Context(), "sync", "sync", "success")
+	observability.RecordAdminRBACSyncReport(r.Context(), "created_permissions", float64(report.CreatedPermissions))
+	observability.RecordAdminRBACSyncReport(r.Context(), "created_roles", float64(report.CreatedRoles))
+	observability.RecordAdminRBACSyncReport(r.Context(), "bound_permissions", float64(report.BoundPermissions))
+	if report.Noop {
+		observability.RecordAdminRBACSyncReport(r.Context(), "noop", 1)
+	} else {
+		observability.RecordAdminRBACSyncReport(r.Context(), "noop", 0)
+	}
 	h.invalidateRBACPermissionCacheAll(r)
 	h.invalidateAdminListCaches(r, "admin.users.list", "admin.roles.list", "admin.permissions.list")
 	h.invalidateNegativeLookupCaches(r, roleNegativeLookupNamespace, permissionNegativeLookupNamespace)

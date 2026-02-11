@@ -55,6 +55,7 @@ type AppMetrics struct {
 	oauthGoogleErrorsCounter     metric.Int64Counter
 	rbacAuthorizationCounter     metric.Int64Counter
 	securityBypassCounter        metric.Int64Counter
+	adminRBACSyncReport          metric.Float64Histogram
 }
 
 var (
@@ -287,6 +288,13 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 	if err != nil {
 		return nil, err
 	}
+	adminRBACSyncReport, err := meter.Float64Histogram(
+		"admin.rbac.sync.report",
+		metric.WithDescription("RBAC sync report counts by field"),
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	metricsMu.Lock()
 	appMetrics = &AppMetrics{
@@ -326,6 +334,7 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 		oauthGoogleErrorsCounter:     oauthGoogleErrorsCounter,
 		rbacAuthorizationCounter:     rbacAuthorizationCounter,
 		securityBypassCounter:        securityBypassCounter,
+		adminRBACSyncReport:          adminRBACSyncReport,
 	}
 	metricsMu.Unlock()
 
@@ -797,5 +806,17 @@ func RecordSecurityBypassEvent(ctx context.Context, reason, scope string) {
 	m.securityBypassCounter.Add(ctx, 1, metric.WithAttributes(
 		attribute.String("reason", reason),
 		attribute.String("scope", scope),
+	))
+}
+
+func RecordAdminRBACSyncReport(ctx context.Context, field string, value float64) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.adminRBACSyncReport.Record(ctx, value, metric.WithAttributes(
+		attribute.String("field", field),
 	))
 }
