@@ -55,3 +55,15 @@ func TestProbeRunnerStartupGrace(t *testing.T) {
 		t.Fatalf("unexpected grace results: %+v", results)
 	}
 }
+
+func TestHealthOutcome(t *testing.T) {
+	if got := healthOutcome(context.DeadlineExceeded, CheckResult{Name: "db", Healthy: false}); got != "timeout" {
+		t.Fatalf("expected timeout outcome, got %q", got)
+	}
+	if got := healthOutcome(nil, CheckResult{Name: "db", Healthy: true}); got != "healthy" {
+		t.Fatalf("expected healthy outcome, got %q", got)
+	}
+	if got := healthOutcome(nil, CheckResult{Name: "db", Healthy: false}); got != "unhealthy" {
+		t.Fatalf("expected unhealthy outcome, got %q", got)
+	}
+}

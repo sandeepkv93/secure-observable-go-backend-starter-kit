@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/domain"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/observability"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -33,6 +34,12 @@ func (s *DBIdempotencyStore) CleanupExpired(ctx context.Context, now time.Time, 
 	res := scoped.
 		Where("id IN (?)", sub).
 		Delete(&domain.IdempotencyRecord{})
+	if res.Error != nil {
+		observability.RecordIdempotencyCleanupRun(ctx, "error")
+		return res.RowsAffected, res.Error
+	}
+	observability.RecordIdempotencyCleanupRun(ctx, "success")
+	observability.RecordIdempotencyCleanupDeletedRows(ctx, res.RowsAffected)
 	return res.RowsAffected, res.Error
 }
 

@@ -42,6 +42,10 @@ type AppMetrics struct {
 	adminListPageSize            metric.Float64Histogram
 	healthCheckResultCounter     metric.Int64Counter
 	healthCheckDuration          metric.Float64Histogram
+	databaseStartupCounter       metric.Int64Counter
+	databaseStartupDuration      metric.Float64Histogram
+	idempotencyCleanupCounter    metric.Int64Counter
+	idempotencyCleanupDeleted    metric.Float64Histogram
 }
 
 var (
@@ -207,6 +211,29 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 	if err != nil {
 		return nil, err
 	}
+	databaseStartupCounter, err := meter.Int64Counter("database.startup.events")
+	if err != nil {
+		return nil, err
+	}
+	databaseStartupDuration, err := meter.Float64Histogram(
+		"database.startup.duration",
+		metric.WithUnit("s"),
+		metric.WithDescription("Duration of database startup phases in seconds"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	idempotencyCleanupCounter, err := meter.Int64Counter("idempotency.cleanup.runs")
+	if err != nil {
+		return nil, err
+	}
+	idempotencyCleanupDeleted, err := meter.Float64Histogram(
+		"idempotency.cleanup.deleted_rows",
+		metric.WithDescription("Deleted idempotency rows per cleanup run"),
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	metricsMu.Lock()
 	appMetrics = &AppMetrics{
@@ -233,6 +260,10 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 		adminListPageSize:            adminListPageSize,
 		healthCheckResultCounter:     healthCheckResultCounter,
 		healthCheckDuration:          healthCheckDuration,
+		databaseStartupCounter:       databaseStartupCounter,
+		databaseStartupDuration:      databaseStartupDuration,
+		idempotencyCleanupCounter:    idempotencyCleanupCounter,
+		idempotencyCleanupDeleted:    idempotencyCleanupDeleted,
 	}
 	metricsMu.Unlock()
 
@@ -539,4 +570,51 @@ func RecordHealthCheckDuration(ctx context.Context, check string, duration time.
 	m.healthCheckDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(
 		attribute.String("check", check),
 	))
+}
+
+func RecordDatabaseStartupEvent(ctx context.Context, phase, outcome string) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.databaseStartupCounter.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("phase", phase),
+		attribute.String("outcome", outcome),
+	))
+}
+
+func RecordDatabaseStartupDuration(ctx context.Context, phase string, duration time.Duration) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.databaseStartupDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(
+		attribute.String("phase", phase),
+	))
+}
+
+func RecordIdempotencyCleanupRun(ctx context.Context, outcome string) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.idempotencyCleanupCounter.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("outcome", outcome),
+	))
+}
+
+func RecordIdempotencyCleanupDeletedRows(ctx context.Context, deleted int64) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.idempotencyCleanupDeleted.Record(ctx, float64(deleted))
 }

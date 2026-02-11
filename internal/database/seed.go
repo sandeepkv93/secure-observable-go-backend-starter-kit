@@ -1,11 +1,13 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/domain"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/observability"
 
 	"gorm.io/gorm"
 )
@@ -32,11 +34,17 @@ func Seed(db *gorm.DB, bootstrapAdminEmail string) error {
 }
 
 func SeedSync(db *gorm.DB, bootstrapAdminEmail string) (*RBACSyncReport, error) {
+	start := time.Now()
+	defer func() {
+		observability.RecordDatabaseStartupDuration(context.Background(), "seed", time.Since(start))
+	}()
+
 	report := &RBACSyncReport{}
 
 	for _, p := range defaultPermissions {
 		res := db.Where("resource = ? AND action = ?", p.Resource, p.Action).FirstOrCreate(&p)
 		if res.Error != nil {
+			observability.RecordDatabaseStartupEvent(context.Background(), "seed", "error")
 			return nil, res.Error
 		}
 		if res.RowsAffected > 0 {
@@ -48,6 +56,7 @@ func SeedSync(db *gorm.DB, bootstrapAdminEmail string) (*RBACSyncReport, error) 
 	adminRole := domain.Role{Name: "admin", Description: "Administrator role"}
 	res := db.Where("name = ?", userRole.Name).FirstOrCreate(&userRole)
 	if res.Error != nil {
+		observability.RecordDatabaseStartupEvent(context.Background(), "seed", "error")
 		return nil, res.Error
 	}
 	if res.RowsAffected > 0 {
@@ -55,6 +64,7 @@ func SeedSync(db *gorm.DB, bootstrapAdminEmail string) (*RBACSyncReport, error) 
 	}
 	res = db.Where("name = ?", adminRole.Name).FirstOrCreate(&adminRole)
 	if res.Error != nil {
+		observability.RecordDatabaseStartupEvent(context.Background(), "seed", "error")
 		return nil, res.Error
 	}
 	if res.RowsAffected > 0 {
@@ -63,11 +73,13 @@ func SeedSync(db *gorm.DB, bootstrapAdminEmail string) (*RBACSyncReport, error) 
 
 	var perms []domain.Permission
 	if err := db.Where("resource IN ?", []string{"users", "roles", "permissions"}).Find(&perms).Error; err != nil {
+		observability.RecordDatabaseStartupEvent(context.Background(), "seed", "error")
 		return nil, err
 	}
 	if len(perms) > 0 {
 		var before domain.Role
 		if err := db.Preload("Permissions").Where("id = ?", adminRole.ID).First(&before).Error; err != nil {
+			observability.RecordDatabaseStartupEvent(context.Background(), "seed", "error")
 			return nil, err
 		}
 		beforeSet := make(map[uint]struct{}, len(before.Permissions))
@@ -75,6 +87,7 @@ func SeedSync(db *gorm.DB, bootstrapAdminEmail string) (*RBACSyncReport, error) 
 			beforeSet[p.ID] = struct{}{}
 		}
 		if err := db.Model(&adminRole).Association("Permissions").Replace(&perms); err != nil {
+			observability.RecordDatabaseStartupEvent(context.Background(), "seed", "error")
 			return nil, err
 		}
 		for _, p := range perms {
@@ -89,15 +102,18 @@ func SeedSync(db *gorm.DB, bootstrapAdminEmail string) (*RBACSyncReport, error) 
 		var u domain.User
 		if err := db.Where("email = ?", email).First(&u).Error; err != nil {
 			if err != gorm.ErrRecordNotFound {
+				observability.RecordDatabaseStartupEvent(context.Background(), "seed", "error")
 				return nil, err
 			}
 		} else {
 			var count int64
 			if err := db.Table("user_roles").Where("user_id = ? AND role_id = ?", u.ID, adminRole.ID).Count(&count).Error; err != nil {
+				observability.RecordDatabaseStartupEvent(context.Background(), "seed", "error")
 				return nil, err
 			}
 			if count == 0 {
 				if err := db.Model(&u).Association("Roles").Append(&adminRole); err != nil {
+					observability.RecordDatabaseStartupEvent(context.Background(), "seed", "error")
 					return nil, fmt.Errorf("assign bootstrap admin role: %w", err)
 				}
 				report.BoundPermissions++
@@ -106,6 +122,7 @@ func SeedSync(db *gorm.DB, bootstrapAdminEmail string) (*RBACSyncReport, error) 
 	}
 
 	report.Noop = report.CreatedPermissions == 0 && report.CreatedRoles == 0 && report.BoundPermissions == 0
+	observability.RecordDatabaseStartupEvent(context.Background(), "seed", "success")
 	return report, nil
 }
 

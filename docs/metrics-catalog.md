@@ -43,6 +43,10 @@ Non-scope:
 | `admin.list.page_size` | Histogram (float64) | 1 | `endpoint` | `RecordAdminListPageSize` calls in `internal/http/handler/admin_handler.go` |
 | `health.check.results` | Counter (int64) | 1 | `check`, `outcome` | `RecordHealthCheckResult` calls in `internal/health/checker.go` |
 | `health.check.duration` | Histogram (float64) | `s` | `check` | `RecordHealthCheckDuration` calls in `internal/health/checker.go` |
+| `database.startup.events` | Counter (int64) | 1 | `phase`, `outcome` | `RecordDatabaseStartupEvent` calls in `internal/database/*.go` |
+| `database.startup.duration` | Histogram (float64) | `s` | `phase` | `RecordDatabaseStartupDuration` calls in `internal/database/*.go` |
+| `idempotency.cleanup.runs` | Counter (int64) | 1 | `outcome` | `RecordIdempotencyCleanupRun` calls in `internal/service/idempotency_store_db.go` |
+| `idempotency.cleanup.deleted_rows` | Histogram (float64) | 1 | none | `RecordIdempotencyCleanupDeletedRows` calls in `internal/service/idempotency_store_db.go` |
 | `admin.rbac.mutations` | Counter (int64) | 1 | `entity`, `action`, `status` | `RecordAdminRBACMutation` calls in `internal/http/handler/admin_handler.go` |
 | `admin.list.cache.events` | Counter (int64) | 1 | `endpoint`, `outcome` | `RecordAdminListCacheEvent` calls in `internal/http/handler/admin_handler.go` |
 | `auth.rbac.permission.cache.events` | Counter (int64) | 1 | `outcome` | `RecordRBACPermissionCacheEvent` calls in `internal/http/middleware/rbac_middleware.go`, `internal/service/rbac_permission_resolver.go`, `internal/http/handler/admin_handler.go` |
@@ -117,6 +121,19 @@ Non-scope:
 `health.check.duration`
 - `check` values currently emitted: `startup_grace`, `db`, `redis`
 
+`database.startup.events`
+- `phase`: `open`, `migrate`, `seed`
+- `outcome`: `success`, `error`
+
+`database.startup.duration`
+- `phase`: `open`, `migrate`, `seed`
+
+`idempotency.cleanup.runs`
+- `outcome`: `success`, `error`
+
+`idempotency.cleanup.deleted_rows`
+- no attributes
+
 `admin.rbac.mutations`
 - `entity`: `user_role`, `role`, `permission`, `sync`
 - `action`: `set_user_roles`, `create`, `update`, `delete`, `sync`
@@ -181,6 +198,9 @@ The exact auto-generated metric names are not hardcoded in this repository; they
 - `internal/http/handler/auth_handler.go`
 - `internal/http/handler/admin_handler.go`
 - `internal/http/handler/user_handler.go`
+- `internal/database/postgres.go`
+- `internal/database/migrate.go`
+- `internal/database/seed.go`
 - `internal/health/checker.go`
 - `internal/http/middleware/auth_middleware.go`
 - `internal/http/middleware/security_middleware.go`
@@ -189,6 +209,7 @@ The exact auto-generated metric names are not hardcoded in this repository; they
 - `internal/http/middleware/rbac_middleware.go`
 - `internal/service/auth_abuse_guard.go`
 - `internal/service/auth_abuse_guard_redis.go`
+- `internal/service/idempotency_store_db.go`
 - `internal/service/rbac_permission_resolver.go`
 - `internal/service/token_service.go`
 - `internal/http/router/router.go`

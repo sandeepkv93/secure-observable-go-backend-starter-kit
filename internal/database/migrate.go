@@ -1,13 +1,18 @@
 package database
 
 import (
+	"context"
+	"time"
+
 	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/domain"
+	"github.com/sandeepkv93/secure-observable-go-backend-starter-kit/internal/observability"
 
 	"gorm.io/gorm"
 )
 
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	start := time.Now()
+	err := db.AutoMigrate(
 		&domain.User{},
 		&domain.LocalCredential{},
 		&domain.Role{},
@@ -19,4 +24,11 @@ func Migrate(db *gorm.DB) error {
 		&domain.VerificationToken{},
 		&domain.IdempotencyRecord{},
 	)
+	observability.RecordDatabaseStartupDuration(context.Background(), "migrate", time.Since(start))
+	if err != nil {
+		observability.RecordDatabaseStartupEvent(context.Background(), "migrate", "error")
+		return err
+	}
+	observability.RecordDatabaseStartupEvent(context.Background(), "migrate", "success")
+	return nil
 }
