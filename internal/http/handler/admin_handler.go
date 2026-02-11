@@ -1045,7 +1045,20 @@ func (h *AdminHandler) readAdminListCache(r *http.Request, namespace, key string
 	if h.adminListCache == nil || h.adminListCacheTTL <= 0 {
 		return nil, false
 	}
-	cached, ok, err := h.adminListCache.Get(r.Context(), namespace, key)
+	var (
+		cached []byte
+		ok     bool
+		err    error
+	)
+	if cacheWithAge, hasAge := h.adminListCache.(service.AdminListCacheStoreWithAge); hasAge {
+		var age time.Duration
+		cached, ok, age, err = cacheWithAge.GetWithAge(r.Context(), namespace, key)
+		if err == nil && ok {
+			observability.RecordAdminListCacheEntryAge(r.Context(), namespace, age)
+		}
+	} else {
+		cached, ok, err = h.adminListCache.Get(r.Context(), namespace, key)
+	}
 	if err != nil {
 		observability.RecordAdminListCacheEvent(r.Context(), namespace, "store_error")
 		return nil, false
@@ -1104,6 +1117,7 @@ func (h *AdminHandler) readNegativeLookupCache(r *http.Request, namespace, key s
 		return false
 	}
 	observability.RecordAdminListCacheEvent(r.Context(), namespace, "negative_hit")
+	observability.RecordAdminNegativeLookupEffectiveness(r.Context(), "prevented_db_fetch")
 	return true
 }
 

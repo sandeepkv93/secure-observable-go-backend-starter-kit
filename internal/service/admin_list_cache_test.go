@@ -23,6 +23,17 @@ func TestInMemoryAdminListCacheStoreGetSetInvalidate(t *testing.T) {
 	if string(got) != `{"x":1}` {
 		t.Fatalf("unexpected cache payload: %s", string(got))
 	}
+	withAge := any(store).(AdminListCacheStoreWithAge)
+	_, ok, age, err := withAge.GetWithAge(ctx, "admin.users", "k1")
+	if err != nil {
+		t.Fatalf("get cache with age: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected cache hit from GetWithAge")
+	}
+	if age < 0 {
+		t.Fatalf("expected non-negative age, got %v", age)
+	}
 
 	if err := store.InvalidateNamespace(ctx, "admin.users"); err != nil {
 		t.Fatalf("invalidate namespace: %v", err)
@@ -65,6 +76,17 @@ func TestNoopAdminListCacheStoreAlwaysMisses(t *testing.T) {
 	}
 	if ok {
 		t.Fatal("expected noop cache miss")
+	}
+	withAge := any(store).(AdminListCacheStoreWithAge)
+	_, ok, age, err := withAge.GetWithAge(ctx, "admin.permissions", "k")
+	if err != nil {
+		t.Fatalf("get noop cache with age: %v", err)
+	}
+	if ok {
+		t.Fatal("expected noop cache miss from GetWithAge")
+	}
+	if age != 0 {
+		t.Fatalf("expected zero age from noop cache, got %v", age)
 	}
 	if err := store.InvalidateNamespace(ctx, "admin.permissions"); err != nil {
 		t.Fatalf("invalidate noop cache: %v", err)

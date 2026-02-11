@@ -59,6 +59,8 @@ Non-scope:
 | `admin.rbac.sync.report` | Histogram (float64) | 1 | `field` | `RecordAdminRBACSyncReport` calls in `internal/http/handler/admin_handler.go` |
 | `admin.rbac.mutations` | Counter (int64) | 1 | `entity`, `action`, `status` | `RecordAdminRBACMutation` calls in `internal/http/handler/admin_handler.go` |
 | `admin.list.cache.events` | Counter (int64) | 1 | `endpoint`, `outcome` | `RecordAdminListCacheEvent` calls in `internal/http/handler/admin_handler.go` |
+| `admin.list.cache.entry_age` | Histogram (float64) | `s` | `namespace` | `RecordAdminListCacheEntryAge` calls in `internal/http/handler/admin_handler.go` |
+| `admin.lookup.negative.effectiveness` | Counter (int64) | 1 | `outcome` | `RecordAdminNegativeLookupEffectiveness` calls in `internal/http/handler/admin_handler.go` |
 | `auth.rbac.authorization.events` | Counter (int64) | 1 | `required_permission`, `outcome` | `RecordRBACAuthorizationEvent` calls in `internal/http/middleware/rbac_middleware.go` |
 | `auth.rbac.permission.cache.events` | Counter (int64) | 1 | `outcome` | `RecordRBACPermissionCacheEvent` calls in `internal/service/rbac_permission_resolver.go`, `internal/http/handler/admin_handler.go` |
 | `http.idempotency.events` | Counter (int64) | 1 | `scope`, `outcome` | `RecordIdempotencyEvent` calls in `internal/http/middleware/idempotency_middleware.go` |
@@ -195,6 +197,12 @@ Non-scope:
 `admin.list.cache.events`
 - `outcome` values used: `hit`, `miss`, `store`, `store_error`, `encode_error`, `invalidate`, `invalidate_error`, `singleflight_leader`, `singleflight_shared`, `error`, `negative_hit`, `negative_miss`, `negative_store`, `negative_store_error`, `negative_invalidate`, `negative_invalidate_error`, `etag_ok`, `etag_not_modified`
 - `endpoint` is a namespace string (examples): `admin.users.list`, `admin.roles.list`, `admin.permissions.list`, `admin.lookup.roles.missing`, `admin.lookup.permissions.missing`
+
+`admin.list.cache.entry_age`
+- `namespace` values include admin list namespaces such as `admin.users.list`, `admin.roles.list`, `admin.permissions.list`
+
+`admin.lookup.negative.effectiveness`
+- `outcome` values currently emitted: `prevented_db_fetch`
 
 `auth.rbac.authorization.events`
 - `outcome`: `allowed`, `denied`, `resolver_error`

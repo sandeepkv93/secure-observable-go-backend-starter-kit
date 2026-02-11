@@ -12,6 +12,11 @@ type AdminListCacheStore interface {
 	InvalidateNamespace(ctx context.Context, namespace string) error
 }
 
+type AdminListCacheStoreWithAge interface {
+	AdminListCacheStore
+	GetWithAge(ctx context.Context, namespace, key string) ([]byte, bool, time.Duration, error)
+}
+
 type NoopAdminListCacheStore struct{}
 
 func NewNoopAdminListCacheStore() *NoopAdminListCacheStore {
@@ -20,6 +25,10 @@ func NewNoopAdminListCacheStore() *NoopAdminListCacheStore {
 
 func (s *NoopAdminListCacheStore) Get(context.Context, string, string) ([]byte, bool, error) {
 	return nil, false, nil
+}
+
+func (s *NoopAdminListCacheStore) GetWithAge(context.Context, string, string) ([]byte, bool, time.Duration, error) {
+	return nil, false, 0, nil
 }
 
 func (s *NoopAdminListCacheStore) Set(context.Context, string, string, []byte, time.Duration) error {
@@ -32,6 +41,7 @@ func (s *NoopAdminListCacheStore) InvalidateNamespace(context.Context, string) e
 
 type memoryCacheEntry struct {
 	payload   []byte
+	createdAt time.Time
 	expiresAt time.Time
 }
 
@@ -47,17 +57,22 @@ func NewInMemoryAdminListCacheStore() *InMemoryAdminListCacheStore {
 }
 
 func (s *InMemoryAdminListCacheStore) Get(_ context.Context, namespace, key string) ([]byte, bool, error) {
+	payload, ok, _, err := s.GetWithAge(context.Background(), namespace, key)
+	return payload, ok, err
+}
+
+func (s *InMemoryAdminListCacheStore) GetWithAge(_ context.Context, namespace, key string) ([]byte, bool, time.Duration, error) {
 	now := time.Now().UTC()
 	s.mu.RLock()
 	ns, ok := s.store[namespace]
 	if !ok {
 		s.mu.RUnlock()
-		return nil, false, nil
+		return nil, false, 0, nil
 	}
 	entry, ok := ns[key]
 	s.mu.RUnlock()
 	if !ok {
-		return nil, false, nil
+		return nil, false, 0, nil
 	}
 	if now.After(entry.expiresAt) {
 		s.mu.Lock()
@@ -68,9 +83,13 @@ func (s *InMemoryAdminListCacheStore) Get(_ context.Context, namespace, key stri
 			}
 		}
 		s.mu.Unlock()
-		return nil, false, nil
+		return nil, false, 0, nil
 	}
-	return append([]byte(nil), entry.payload...), true, nil
+	age := now.Sub(entry.createdAt)
+	if age < 0 {
+		age = 0
+	}
+	return append([]byte(nil), entry.payload...), true, age, nil
 }
 
 func (s *InMemoryAdminListCacheStore) Set(_ context.Context, namespace, key string, value []byte, ttl time.Duration) error {
@@ -86,6 +105,7 @@ func (s *InMemoryAdminListCacheStore) Set(_ context.Context, namespace, key stri
 	}
 	ns[key] = memoryCacheEntry{
 		payload:   append([]byte(nil), value...),
+		createdAt: time.Now().UTC(),
 		expiresAt: time.Now().UTC().Add(ttl),
 	}
 	return nil

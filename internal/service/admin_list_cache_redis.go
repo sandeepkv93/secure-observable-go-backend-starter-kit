@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -26,17 +27,34 @@ func NewRedisAdminListCacheStore(client redis.UniversalClient, prefix string) *R
 }
 
 func (s *RedisAdminListCacheStore) Get(ctx context.Context, namespace, key string) ([]byte, bool, error) {
+	value, ok, _, err := s.GetWithAge(ctx, namespace, key)
+	return value, ok, err
+}
+
+func (s *RedisAdminListCacheStore) GetWithAge(ctx context.Context, namespace, key string) ([]byte, bool, time.Duration, error) {
 	if s.client == nil {
-		return nil, false, nil
+		return nil, false, 0, nil
 	}
 	value, err := s.client.Get(ctx, s.dataKey(namespace, key)).Bytes()
 	if err == redis.Nil {
-		return nil, false, nil
+		return nil, false, 0, nil
 	}
 	if err != nil {
-		return nil, false, err
+		return nil, false, 0, err
 	}
-	return value, true, nil
+
+	age := time.Duration(0)
+	createdAtRaw, createdErr := s.client.Get(ctx, s.metaKey(namespace, key)).Result()
+	if createdErr == nil {
+		if nanos, parseErr := strconv.ParseInt(createdAtRaw, 10, 64); parseErr == nil {
+			createdAt := time.Unix(0, nanos).UTC()
+			age = time.Since(createdAt)
+			if age < 0 {
+				age = 0
+			}
+		}
+	}
+	return value, true, age, nil
 }
 
 func (s *RedisAdminListCacheStore) Set(ctx context.Context, namespace, key string, value []byte, ttl time.Duration) error {
@@ -44,10 +62,14 @@ func (s *RedisAdminListCacheStore) Set(ctx context.Context, namespace, key strin
 		return nil
 	}
 	dataKey := s.dataKey(namespace, key)
+	metaKey := s.metaKey(namespace, key)
 	namespaceIndex := s.namespaceIndexKey(namespace)
+	now := time.Now().UTC().UnixNano()
 	pipe := s.client.TxPipeline()
 	pipe.Set(ctx, dataKey, value, ttl)
+	pipe.Set(ctx, metaKey, strconv.FormatInt(now, 10), ttl)
 	pipe.SAdd(ctx, namespaceIndex, dataKey)
+	pipe.SAdd(ctx, namespaceIndex, metaKey)
 	pipe.Expire(ctx, namespaceIndex, ttl+time.Minute)
 	_, err := pipe.Exec(ctx)
 	return err
@@ -77,6 +99,10 @@ func (s *RedisAdminListCacheStore) dataKey(namespace, key string) string {
 
 func (s *RedisAdminListCacheStore) namespaceIndexKey(namespace string) string {
 	return fmt.Sprintf("%s:index:%s", s.prefix, normalizeToken(namespace))
+}
+
+func (s *RedisAdminListCacheStore) metaKey(namespace, key string) string {
+	return fmt.Sprintf("%s:meta:%s:%s", s.prefix, normalizeToken(namespace), hashToken(key))
 }
 
 func normalizeToken(v string) string {

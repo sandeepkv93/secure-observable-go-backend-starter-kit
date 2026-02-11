@@ -57,6 +57,8 @@ type AppMetrics struct {
 	securityBypassCounter        metric.Int64Counter
 	adminRBACSyncReport          metric.Float64Histogram
 	httpMiddlewareValidation     metric.Int64Counter
+	adminListCacheEntryAge       metric.Float64Histogram
+	adminNegativeLookupCounter   metric.Int64Counter
 }
 
 var (
@@ -300,6 +302,18 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 	if err != nil {
 		return nil, err
 	}
+	adminListCacheEntryAge, err := meter.Float64Histogram(
+		"admin.list.cache.entry_age",
+		metric.WithUnit("s"),
+		metric.WithDescription("Age in seconds of admin list cache entries at hit time"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	adminNegativeLookupCounter, err := meter.Int64Counter("admin.lookup.negative.effectiveness")
+	if err != nil {
+		return nil, err
+	}
 
 	metricsMu.Lock()
 	appMetrics = &AppMetrics{
@@ -341,6 +355,8 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 		securityBypassCounter:        securityBypassCounter,
 		adminRBACSyncReport:          adminRBACSyncReport,
 		httpMiddlewareValidation:     httpMiddlewareValidation,
+		adminListCacheEntryAge:       adminListCacheEntryAge,
+		adminNegativeLookupCounter:   adminNegativeLookupCounter,
 	}
 	metricsMu.Unlock()
 
@@ -836,6 +852,30 @@ func RecordMiddlewareValidationEvent(ctx context.Context, middleware, outcome st
 	}
 	m.httpMiddlewareValidation.Add(ctx, 1, metric.WithAttributes(
 		attribute.String("middleware", middleware),
+		attribute.String("outcome", outcome),
+	))
+}
+
+func RecordAdminListCacheEntryAge(ctx context.Context, namespace string, age time.Duration) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.adminListCacheEntryAge.Record(ctx, age.Seconds(), metric.WithAttributes(
+		attribute.String("namespace", namespace),
+	))
+}
+
+func RecordAdminNegativeLookupEffectiveness(ctx context.Context, outcome string) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.adminNegativeLookupCounter.Add(ctx, 1, metric.WithAttributes(
 		attribute.String("outcome", outcome),
 	))
 }
