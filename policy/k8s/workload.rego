@@ -1,12 +1,49 @@
 package k8s.workload
 
-# Enforce baseline workload policies on rendered Kubernetes manifests.
+# Enforce workload baseline and hardened security defaults.
+# Scoped exceptions are explicitly listed to keep debt visible.
 
 workload_kinds := {"Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob"}
+
+# Workloads that are temporarily exempt from pod-level strict controls.
+# Format: <Kind>/<name>
+pod_security_exemptions := {
+  "StatefulSet/postgres",
+  "StatefulSet/redis",
+  "Deployment/otel-collector",
+  "Deployment/tempo",
+  "Deployment/loki",
+  "Deployment/mimir",
+  "Deployment/grafana",
+}
+
+# Containers that are temporarily exempt from strict container-level controls.
+# Format: <Kind>/<name>/<container>
+container_security_exemptions := {
+  "StatefulSet/postgres/postgres",
+  "StatefulSet/redis/redis",
+  "Deployment/otel-collector/otel-collector",
+  "Deployment/tempo/tempo",
+  "Deployment/loki/loki",
+  "Deployment/mimir/mimir",
+  "Deployment/grafana/grafana",
+}
 
 is_workload {
   input.kind
   workload_kinds[input.kind]
+}
+
+resource_name := name {
+  name := object.get(input.metadata, "name", "<unknown>")
+}
+
+workload_id := id {
+  id := sprintf("%s/%s", [input.kind, resource_name])
+}
+
+is_pod_security_exempt {
+  pod_security_exemptions[workload_id]
 }
 
 containers[c] {
@@ -28,8 +65,28 @@ containers[c] {
   c := input.spec.template.spec.containers[_]
 }
 
-resource_name := name {
-  name := object.get(input.metadata, "name", "<unknown>")
+container_id(c) := id {
+  id := sprintf("%s/%s/%s", [input.kind, resource_name, c.name])
+}
+
+is_container_security_exempt(c) {
+  container_security_exemptions[container_id(c)]
+}
+
+pod_spec := spec {
+  input.kind == "CronJob"
+  spec := input.spec.jobTemplate.spec.template.spec
+}
+
+pod_spec := spec {
+  input.kind == "Job"
+  spec := input.spec.template.spec
+}
+
+pod_spec := spec {
+  input.kind != "Job"
+  input.kind != "CronJob"
+  spec := input.spec.template.spec
 }
 
 deny[msg] {
@@ -54,8 +111,33 @@ deny[msg] {
 
 deny[msg] {
   c := containers[_]
-  object.get(object.get(c, "securityContext", {}), "allowPrivilegeEscalation", false)
+  not is_container_security_exempt(c)
+  sc := object.get(c, "securityContext", {})
+  object.get(sc, "allowPrivilegeEscalation", null) != false
   msg := sprintf("%s/%s container %q must set allowPrivilegeEscalation=false", [input.kind, resource_name, c.name])
+}
+
+deny[msg] {
+  c := containers[_]
+  not is_container_security_exempt(c)
+  sc := object.get(c, "securityContext", {})
+  object.get(sc, "readOnlyRootFilesystem", null) != true
+  msg := sprintf("%s/%s container %q must set readOnlyRootFilesystem=true", [input.kind, resource_name, c.name])
+}
+
+deny[msg] {
+  not is_pod_security_exempt
+  sc := object.get(pod_spec, "securityContext", {})
+  object.get(sc, "runAsNonRoot", null) != true
+  msg := sprintf("%s/%s pod must set securityContext.runAsNonRoot=true", [input.kind, resource_name])
+}
+
+deny[msg] {
+  not is_pod_security_exempt
+  sc := object.get(pod_spec, "securityContext", {})
+  seccomp := object.get(sc, "seccompProfile", {})
+  object.get(seccomp, "type", "") != "RuntimeDefault"
+  msg := sprintf("%s/%s pod must set securityContext.seccompProfile.type=RuntimeDefault", [input.kind, resource_name])
 }
 
 deny[msg] {
