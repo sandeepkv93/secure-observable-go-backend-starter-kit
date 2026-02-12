@@ -44,7 +44,7 @@ This repository is a production-oriented Go backend starter that brings together
 
 ## Architecture at a Glance
 
-- Request path: `internal/http` -> `internal/service` -> `internal/repository` -> `internal/database`
+- Request path: `internal/http` --> `internal/service` --> `internal/repository` --> `internal/database`
 - Cross-cutting concerns: `internal/security`, `internal/observability`, middleware, and Redis-backed controls
 - Dependency injection: `internal/di` (Wire-generated injectors validated in CI)
 
