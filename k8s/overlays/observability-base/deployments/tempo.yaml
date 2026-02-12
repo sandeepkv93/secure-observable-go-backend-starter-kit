@@ -16,6 +16,10 @@ spec:
         app.kubernetes.io/name: tempo
         app.kubernetes.io/component: observability
     spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: tempo
           image: grafana/tempo:2.5.0
@@ -32,6 +36,8 @@ spec:
             - name: tempo-config
               mountPath: /etc/tempo.yaml
               subPath: tempo.yaml
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /ready
@@ -51,7 +57,15 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
       volumes:
         - name: tempo-config
           configMap:
             name: tempo-config
+        - name: tmp
+          emptyDir: {}
