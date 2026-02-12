@@ -1,4 +1,4 @@
-# Kubernetes Deployment (Phase 1 MVP)
+# Kubernetes Deployment (Phase 1 + Phase 2 Local Workflow)
 
 This directory contains the initial Kubernetes baseline for:
 - API (`secure-observable-api`)
@@ -19,6 +19,8 @@ The manifests are organized with Kustomize and target local/dev workflows first.
 
 ```text
 k8s/
+  kind-config.yaml
+  kind-config-simple.yaml
   base/
     kustomization.yaml
     namespace.yaml
@@ -28,9 +30,36 @@ k8s/
     services/
     persistentvolumes/
     ingress/
+  overlays/
+    development/
+  scripts/
+    kind-setup.sh
+    setup-secrets.sh
+    deploy.sh
+    status.sh
+    cleanup.sh
+    health-check.sh
 ```
 
-## 1) Build API image
+## 1) Create/reset Kind cluster
+
+```bash
+task k8s:cluster-create
+```
+
+Reset flow:
+
+```bash
+task k8s:cluster-reset
+```
+
+The setup script installs ingress-nginx and can optionally install metrics-server:
+
+```bash
+INSTALL_METRICS_SERVER=true task k8s:cluster-create
+```
+
+## 2) Build API image
 
 For local clusters (for example Kind), build the app image first:
 
@@ -44,7 +73,7 @@ Or use automation:
 task k8s:image-build-load-kind
 ```
 
-## 2) Create app secret from template
+## 3) Create app secret from template
 
 A template is provided at:
 
@@ -67,6 +96,7 @@ kubectl -n secure-observable create secret generic app-secrets \
 Task wrapper:
 
 ```bash
+task k8s:secrets-generate
 task k8s:secrets-apply
 ```
 
@@ -80,7 +110,7 @@ task k8s:secrets-encrypt
 When `k8s/secrets/app-secrets.enc.env` exists, `task k8s:secrets-apply`
 decrypts and applies that secret instead of plaintext env file.
 
-## 3) Apply manifests
+## 4) Apply manifests
 
 ```bash
 kubectl apply -k k8s/base
@@ -96,12 +126,34 @@ task k8s:deploy-base
 task k8s:rollout
 ```
 
-## 4) Verify health
+Development overlay deploy (NodePort API service):
+
+```bash
+task k8s:deploy-dev
+```
+
+## 5) Verify health
 
 ```bash
 kubectl -n secure-observable port-forward svc/secure-observable-api 8080:8080
 curl -sSf http://localhost:8080/health/live
 curl -sSf http://localhost:8080/health/ready
+```
+
+Task wrapper:
+
+```bash
+task k8s:health-check
+```
+
+## 6) Common operations
+
+```bash
+task k8s:status
+task k8s:logs-api
+task k8s:port-forward-api
+task k8s:cleanup
+task k8s:cluster-delete
 ```
 
 ## Notes

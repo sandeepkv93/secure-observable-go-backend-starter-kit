@@ -3,17 +3,24 @@ version: "3"
 vars:
   K8S_NAMESPACE: secure-observable
   KIND_CLUSTER_NAME: secure-observable
-  K8S_BASE_PATH: k8s/base
   API_IMAGE: secure-observable-api:dev
 
 tasks:
-  k8s:kind-create:
+  k8s:cluster-create:
     cmds:
-      - kind create cluster --name {{.KIND_CLUSTER_NAME}} --config k8s/kind-config.yaml
+      - KIND_CLUSTER_NAME={{.KIND_CLUSTER_NAME}} bash k8s/scripts/kind-setup.sh create
 
-  k8s:kind-delete:
+  k8s:cluster-delete:
     cmds:
-      - kind delete cluster --name {{.KIND_CLUSTER_NAME}}
+      - KIND_CLUSTER_NAME={{.KIND_CLUSTER_NAME}} bash k8s/scripts/kind-setup.sh delete
+
+  k8s:cluster-reset:
+    cmds:
+      - KIND_CLUSTER_NAME={{.KIND_CLUSTER_NAME}} bash k8s/scripts/kind-setup.sh reset
+
+  k8s:cluster-status:
+    cmds:
+      - KIND_CLUSTER_NAME={{.KIND_CLUSTER_NAME}} bash k8s/scripts/kind-setup.sh status
 
   k8s:image-build:
     cmds:
@@ -28,9 +35,13 @@ tasks:
       - task k8s:image-build
       - task k8s:image-load-kind
 
+  k8s:secrets-generate:
+    cmds:
+      - bash k8s/scripts/setup-secrets.sh generate
+
   k8s:secrets-apply:
     cmds:
-      - bash k8s/scripts/secrets.sh apply
+      - bash k8s/scripts/setup-secrets.sh apply
 
   k8s:secrets-encrypt:
     cmds:
@@ -38,7 +49,15 @@ tasks:
 
   k8s:deploy-base:
     cmds:
-      - kubectl apply -k {{.K8S_BASE_PATH}}
+      - K8S_NAMESPACE={{.K8S_NAMESPACE}} bash k8s/scripts/deploy.sh base
+
+  k8s:deploy-dev:
+    cmds:
+      - K8S_NAMESPACE={{.K8S_NAMESPACE}} bash k8s/scripts/deploy.sh development
+
+  k8s:deploy-observability:
+    cmds:
+      - K8S_NAMESPACE={{.K8S_NAMESPACE}} bash k8s/scripts/deploy.sh observability
 
   k8s:rollout:
     cmds:
@@ -48,13 +67,43 @@ tasks:
 
   k8s:status:
     cmds:
-      - kubectl -n {{.K8S_NAMESPACE}} get pods,svc,ingress
+      - K8S_NAMESPACE={{.K8S_NAMESPACE}} bash k8s/scripts/status.sh
+
+  k8s:logs-api:
+    cmds:
+      - kubectl -n {{.K8S_NAMESPACE}} logs deploy/secure-observable-api --tail=200
+
+  k8s:port-forward-api:
+    cmds:
+      - kubectl -n {{.K8S_NAMESPACE}} port-forward svc/secure-observable-api 8080:8080
+
+  k8s:port-forward-grafana:
+    cmds:
+      - kubectl -n {{.K8S_NAMESPACE}} port-forward svc/grafana 3000:3000
+
+  k8s:health-check:
+    cmds:
+      - K8S_NAMESPACE={{.K8S_NAMESPACE}} bash k8s/scripts/health-check.sh
+
+  k8s:cleanup:
+    cmds:
+      - K8S_NAMESPACE={{.K8S_NAMESPACE}} KIND_CLUSTER_NAME={{.KIND_CLUSTER_NAME}} bash k8s/scripts/cleanup.sh
 
   k8s:setup-full:
     cmds:
-      - task k8s:kind-create
+      - task k8s:cluster-create
       - task k8s:image-build-load-kind
+      - task k8s:secrets-generate
       - task k8s:secrets-apply
-      - task k8s:deploy-base
-      - task k8s:rollout
+      - task k8s:deploy-dev
+      - task k8s:health-check
       - task k8s:status
+
+  # Backward-compatible aliases
+  k8s:kind-create:
+    cmds:
+      - task k8s:cluster-create
+
+  k8s:kind-delete:
+    cmds:
+      - task k8s:cluster-delete
