@@ -131,3 +131,7 @@ tasks:
   k8s:validate-manifests:
     cmds:
       - bash scripts/ci/run_k8s_manifest_validate.sh
+
+  k8s:policy-check:
+    cmds:
+      - bash scripts/ci/run_k8s_policy_check.sh

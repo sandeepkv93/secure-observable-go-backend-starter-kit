@@ -29,8 +29,20 @@ jobs:
           sudo mv /tmp/kubeconform /usr/local/bin/kubeconform
           kubeconform -v
 
+      - name: Install conftest
+        env:
+          CONFTEST_VERSION: v0.59.0
+        run: |
+          curl -sSL "https://github.com/open-policy-agent/conftest/releases/download/${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION#v}_Linux_x86_64.tar.gz" -o /tmp/conftest.tgz
+          tar -xzf /tmp/conftest.tgz -C /tmp conftest
+          sudo mv /tmp/conftest /usr/local/bin/conftest
+          conftest --version
+
       - name: Validate k8s manifests
         run: bash scripts/ci/run_k8s_manifest_validate.sh
+
+      - name: OPA policy checks
+        run: bash scripts/ci/run_k8s_policy_check.sh
 
   fuzz-smoke:
     runs-on: ubuntu-latest
