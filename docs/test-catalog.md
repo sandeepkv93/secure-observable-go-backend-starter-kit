@@ -77,6 +77,8 @@ Generated from repository test sources (`*_test.go`) and test function declarati
   - `TestNormalizePageRequestBounds`, `TestCalcTotalPages`
 - `internal/repository/permission_repository_test.go`
   - `TestPermissionRepositoryListPagedFindByPairsAndConflicts`
+- `internal/repository/repository_test_helpers_test.go`
+  - Helper-only test file (shared test DB setup), no `Test*` declarations
 - `internal/repository/role_repository_test.go`
   - `TestRoleRepositoryCreateUpdateDeleteAndConflict`
 - `internal/repository/session_repository_test.go`
@@ -121,6 +123,8 @@ Generated from repository test sources (`*_test.go`) and test function declarati
   - `TestRedisRBACPermissionCacheStoreKeyingAndInvalidation`, `TestRedisRBACPermissionCacheStoreMalformedEpochValue`
 - `internal/service/rbac_service_test.go`
   - `TestRBACPermissionEvaluation`
+- `internal/service/redis_test_helpers_test.go`
+  - Helper-only test file (shared miniredis client setup), no `Test*` declarations
 - `internal/service/token_service_test.go`
   - `TestTokenRotateSuccessPreservesFamily`, `TestTokenRotateReuseRevokesFamily`, `TestTokenRotateInvalidDoesNotRevokeActiveSessions`, `TestTokenRotateBackfillsLegacyLineage`
 - `internal/tools/common/env_test.go`

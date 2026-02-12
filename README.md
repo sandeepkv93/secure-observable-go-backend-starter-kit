@@ -86,7 +86,7 @@ flowchart LR
 - [Bazelisk](https://github.com/bazelbuild/bazelisk)
 - Docker + Docker Compose
 
-### Clone the repo and move into it
+### Clone the repo and cd into it
 
 ```bash
 git clone git@github.com:sandeepkv93/secure-observable-go-backend-starter-kit.git
@@ -116,17 +116,9 @@ curl -sSf http://localhost:8080/health/ready
 ```
 
 Endpoints:
+
 - API base URL: `http://localhost:8080`
 - Grafana UI: `http://localhost:3000` (`admin` / `admin`)
-
-### Useful commands
-
-```bash
-task test
-task ci
-task obs-generate-traffic
-task obs-validate
-```
 
 ## Documentation
 
