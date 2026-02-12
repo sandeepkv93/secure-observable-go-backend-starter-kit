@@ -7,8 +7,8 @@ Generated from repository test sources (`*_test.go`) and test function declarati
 - Total test files: 85
 - Unit test files: 66
 - Integration test files: 19
-- Total test functions: 269
-- Unit test functions: 220
+- Total test functions: 273
+- Unit test functions: 224
 - Integration test functions: 49
 
 ## Unit Tests
@@ -106,7 +106,7 @@ Generated from repository test sources (`*_test.go`) and test function declarati
 - `internal/service/auth_password_policy_test.go`
   - `TestValidatePasswordPolicy`
 - `internal/service/auth_service_test.go`
-  - `TestAuthServiceRegisterLocalMatrix`, `TestAuthServiceLoginWithLocalPasswordMatrix`, `TestAuthServiceRequestAndConfirmEmailVerificationMatrix`, `TestAuthServiceForgotAndResetPasswordMatrix`, `TestAuthServiceChangeLocalPasswordMatrix`, `TestAuthServiceGoogleAndParseUserID`, `TestAuthServiceAssignBootstrapAdminIfNeededEdgeCases`
+  - `TestAuthServiceRegisterLocalMatrix`, `TestAuthServiceLoginWithLocalPasswordMatrix`, `TestAuthServiceRequestAndConfirmEmailVerificationMatrix`, `TestAuthServiceForgotAndResetPasswordMatrix`, `TestAuthServiceChangeLocalPasswordMatrix`, `TestAuthServiceGoogleAndParseUserID`, `TestAuthServiceAssignBootstrapAdminIfNeededEdgeCases`, `FuzzAuthServiceParseUserID`, `FuzzAuthServiceTokenHandlingRejectsInvalid`
 - `internal/service/idempotency_store_db_test.go`
   - `TestDBIdempotencyStoreCleanupExpiredDeletesOnlyExpiredRows`, `TestDBIdempotencyStoreCleanupExpiredHonorsBatchSize`
 - `internal/service/idempotency_store_redis_test.go`
@@ -116,7 +116,7 @@ Generated from repository test sources (`*_test.go`) and test function declarati
 - `internal/service/negative_lookup_cache_redis_test.go`
   - `TestRedisNegativeLookupCacheStoreSetGetInvalidateAndStale`
 - `internal/service/oauth_service_test.go`
-  - `TestOAuthServiceHandleGoogleCallbackExchangeError`, `TestOAuthServiceHandleGoogleCallbackUserInfoError`, `TestOAuthServiceHandleGoogleCallbackEmailNotVerified`, `TestClassifyOAuthError`
+  - `TestOAuthServiceHandleGoogleCallbackExchangeError`, `TestOAuthServiceHandleGoogleCallbackUserInfoError`, `TestOAuthServiceHandleGoogleCallbackEmailNotVerified`, `TestOAuthServiceHandleGoogleCallbackNilUserInfo`, `TestClassifyOAuthError`, `FuzzClassifyOAuthErrorRobustness`
 - `internal/service/rbac_permission_resolver_test.go`
   - `TestCachedPermissionResolverSingleflightDedupesConcurrentMisses`, `TestCachedPermissionResolverCachesBySession`, `TestCachedPermissionResolverInvalidateUser`
 - `internal/service/rbac_permission_cache_store_redis_test.go`

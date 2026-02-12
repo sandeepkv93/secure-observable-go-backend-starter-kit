@@ -119,6 +119,10 @@ func (s *OAuthService) HandleGoogleCallback(ctx context.Context, code string) (*
 		observability.RecordGoogleOAuthError(ctx, classifyOAuthError(err))
 		return nil, err
 	}
+	if info == nil {
+		observability.RecordGoogleOAuthError(ctx, "invalid_userinfo")
+		return nil, fmt.Errorf("missing required userinfo fields")
+	}
 
 	if !info.EmailVerified {
 		observability.RecordGoogleOAuthError(ctx, "email_not_verified")

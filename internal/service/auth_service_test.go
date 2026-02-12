@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -498,6 +499,81 @@ func TestAuthServiceAssignBootstrapAdminIfNeededEdgeCases(t *testing.T) {
 	if fx.userRepo.hasRoleByName("other@example.com", "admin") {
 		t.Fatal("did not expect admin role assignment for non-bootstrap email")
 	}
+}
+
+func FuzzAuthServiceParseUserID(f *testing.F) {
+	f.Add("123")
+	f.Add(" 42 ")
+	f.Add("0")
+	f.Add("-1")
+	f.Add("not-a-number")
+	f.Add(strings.Repeat("9", 200))
+	f.Add("🔥")
+
+	f.Fuzz(func(t *testing.T, subject string) {
+		if len(subject) > 512 {
+			subject = subject[:512]
+		}
+		fx := newAuthServiceFixture()
+		id, err := fx.auth.ParseUserID(subject)
+
+		parsed, parseErr := strconv.ParseUint(subject, 10, 64)
+		expectSuccess := parseErr == nil
+
+		if expectSuccess {
+			if err != nil {
+				t.Fatalf("expected success for %q, got err=%v", subject, err)
+			}
+			if id != uint(parsed) {
+				t.Fatalf("id mismatch for %q: got=%d want=%d", subject, id, parsed)
+			}
+			return
+		}
+
+		if err == nil {
+			t.Fatalf("expected invalid user subject error for %q, got id=%d", subject, id)
+		}
+		if !strings.Contains(err.Error(), "invalid user subject") {
+			t.Fatalf("expected invalid user subject message for %q, got err=%v", subject, err)
+		}
+	})
+}
+
+func FuzzAuthServiceTokenHandlingRejectsInvalid(f *testing.F) {
+	f.Add("", "StrongPass123!")
+	f.Add("   ", "StrongPass123!")
+	f.Add("missing-token", "StrongPass123!")
+	f.Add("🔥token", "StrongPass123!")
+	f.Add(strings.Repeat("a", 512), "StrongPass123!")
+	f.Add("token", "weak")
+
+	f.Fuzz(func(t *testing.T, token, newPassword string) {
+		if len(token) > 1024 {
+			token = token[:1024]
+		}
+		if len(newPassword) > 1024 {
+			newPassword = newPassword[:1024]
+		}
+
+		fx := newAuthServiceFixture()
+
+		errConfirm := fx.auth.ConfirmLocalEmailVerification(token)
+		if strings.TrimSpace(token) == "" {
+			if !errors.Is(errConfirm, ErrInvalidVerifyToken) {
+				t.Fatalf("confirm expected ErrInvalidVerifyToken for empty token %q, got %v", token, errConfirm)
+			}
+		} else if errConfirm != nil && !errors.Is(errConfirm, ErrInvalidVerifyToken) {
+			t.Fatalf("confirm expected ErrInvalidVerifyToken or nil for token %q, got %v", token, errConfirm)
+		}
+
+		errReset := fx.auth.ResetLocalPassword(token, newPassword)
+		if errors.Is(errReset, ErrWeakPassword) {
+			return
+		}
+		if !errors.Is(errReset, ErrInvalidVerifyToken) {
+			t.Fatalf("reset expected ErrInvalidVerifyToken/ErrWeakPassword for token=%q password_len=%d, got %v", token, len(newPassword), errReset)
+		}
+	})
 }
 
 type authServiceFixture struct {

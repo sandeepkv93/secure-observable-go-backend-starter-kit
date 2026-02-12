@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"golang.org/x/oauth2"
@@ -78,6 +80,24 @@ func TestOAuthServiceHandleGoogleCallbackEmailNotVerified(t *testing.T) {
 	}
 }
 
+func TestOAuthServiceHandleGoogleCallbackNilUserInfo(t *testing.T) {
+	svc := NewOAuthService(
+		testOAuthProvider{
+			userinfoFn: func(context.Context, *oauth2.Token) (*OAuthUserInfo, error) {
+				return nil, nil
+			},
+		},
+		nil,
+		nil,
+		nil,
+	)
+
+	_, err := svc.HandleGoogleCallback(context.Background(), "code")
+	if err == nil || err.Error() != "missing required userinfo fields" {
+		t.Fatalf("expected missing required userinfo fields error, got %v", err)
+	}
+}
+
 func TestClassifyOAuthError(t *testing.T) {
 	if got := classifyOAuthError(context.Canceled); got != "context_canceled" {
 		t.Fatalf("expected context_canceled, got %q", got)
@@ -95,3 +115,55 @@ func TestClassifyOAuthError(t *testing.T) {
 		t.Fatalf("expected oauth2_exchange, got %q", got)
 	}
 }
+
+func FuzzClassifyOAuthErrorRobustness(f *testing.F) {
+	f.Add(uint8(0), "")
+	f.Add(uint8(1), "userinfo status: 500")
+	f.Add(uint8(2), "missing required userinfo fields")
+	f.Add(uint8(3), "oauth2: invalid grant")
+	f.Add(uint8(4), "random 🔥 text")
+
+	f.Fuzz(func(t *testing.T, kind uint8, msg string) {
+		if len(msg) > 2048 {
+			msg = msg[:2048]
+		}
+
+		var err error
+		switch kind % 6 {
+		case 0:
+			err = nil
+		case 1:
+			err = context.Canceled
+		case 2:
+			err = context.DeadlineExceeded
+		case 3:
+			err = timeoutNetErr{msg: msg}
+		case 4:
+			err = errors.New(msg)
+		default:
+			err = fmt.Errorf("wrapped: %w", errors.New(msg))
+		}
+
+		got := classifyOAuthError(err)
+		switch got {
+		case "none", "context_canceled", "timeout", "userinfo_status", "invalid_userinfo", "oauth2_exchange", "other":
+		default:
+			t.Fatalf("unexpected classification %q for err=%v", got, err)
+		}
+
+		if err == nil && got != "none" {
+			t.Fatalf("nil error should classify to none, got %q", got)
+		}
+		if strings.Contains(strings.ToLower(msg), "userinfo status:") && err != nil && got == "other" {
+			t.Fatalf("userinfo status message should not classify as other: %q", got)
+		}
+	})
+}
+
+type timeoutNetErr struct {
+	msg string
+}
+
+func (e timeoutNetErr) Error() string   { return e.msg }
+func (e timeoutNetErr) Timeout() bool   { return true }
+func (e timeoutNetErr) Temporary() bool { return true }
