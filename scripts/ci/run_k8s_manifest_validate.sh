@@ -33,7 +33,6 @@ for target in "${KUSTOMIZATION_TARGETS[@]}"; do
   kubeconform \
     -strict \
     -summary \
-    -ignore-missing-schemas \
     -kubernetes-version "${KUBE_VERSION}" \
     "${manifest_file}"
 
