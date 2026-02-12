@@ -16,6 +16,10 @@ spec:
         app.kubernetes.io/name: otel-collector
         app.kubernetes.io/component: observability
     spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: otel-collector
           image: otel/opentelemetry-collector-contrib:0.145.0
@@ -34,6 +38,8 @@ spec:
             - name: otel-config
               mountPath: /etc/otelcol-contrib/config.yaml
               subPath: otel-collector-config.yaml
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /
@@ -53,7 +59,15 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
       volumes:
         - name: otel-config
           configMap:
             name: otel-collector-config
+        - name: tmp
+          emptyDir: {}
