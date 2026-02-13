@@ -59,6 +59,15 @@ tasks:
     cmds:
       - K8S_NAMESPACE={{.K8S_NAMESPACE}} bash k8s/scripts/deploy.sh prod-like
 
+  k8s:deploy-staging:
+    cmds:
+      - K8S_NAMESPACE={{.K8S_NAMESPACE}} bash k8s/scripts/deploy.sh staging
+
+  k8s:deploy-production:
+    cmds:
+      - K8S_NAMESPACE={{.K8S_NAMESPACE}} bash k8s/scripts/deploy.sh production
+
+
   k8s:deploy-observability:
     cmds:
       - K8S_NAMESPACE={{.K8S_NAMESPACE}} bash k8s/scripts/deploy.sh observability

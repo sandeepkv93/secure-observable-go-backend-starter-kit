@@ -17,6 +17,8 @@ KUSTOMIZATION_TARGETS=(
   "k8s/base"
   "k8s/overlays/development"
   "k8s/overlays/prod-like"
+  "k8s/overlays/staging"
+  "k8s/overlays/production"
   "k8s/overlays/observability-base"
   "k8s/overlays/observability"
   "k8s/overlays/observability/dev"

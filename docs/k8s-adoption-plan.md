@@ -281,4 +281,5 @@ This order gets reliable Kubernetes parity quickly, then layers observability co
   - ✅ defined PDB strategy for stateful data services (`postgres` and `redis`: minAvailable 1 in prod-like).
   - next: extend availability profiles for environment-specific maintenance windows (e.g., staging vs prod).
 - Rollout safety:
-  - add progressive delivery policy for API (canary/blue-green or staged rollout by environment).
+  - ✅ implemented staged rollout overlays by environment (`staging` and `production`) with guarded rollout windows.
+  - next: evaluate canary/blue-green controller adoption (e.g., Argo Rollouts) if progressive traffic shifting is required.

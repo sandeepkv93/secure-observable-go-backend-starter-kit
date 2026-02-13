@@ -167,6 +167,8 @@ Production-like app overlay deploy (replicas, rollout strategy, and API PDB):
 
 ```bash
 task k8s:deploy-prod-like
+task k8s:deploy-staging
+task k8s:deploy-production
 ```
 
 Observability overlay deploy:
@@ -248,3 +250,8 @@ prod-like availability defaults:
   - API: `minAvailable: 1`
   - Postgres: `minAvailable: 1`
   - Redis: `minAvailable: 1`
+
+staged rollout strategy:
+- `staging` overlay: API `replicas: 2`, `minReadySeconds: 20`, `progressDeadlineSeconds: 600`.
+- `production` overlay: API `replicas: 3`, `minReadySeconds: 30`, `progressDeadlineSeconds: 900`.
+- both keep `maxUnavailable: 0` and `maxSurge: 1` to avoid capacity drops during rollout.
