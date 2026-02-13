@@ -17,7 +17,7 @@ spec:
         app.kubernetes.io/component: observability
     spec:
       securityContext:
-        runAsNonRoot: true
+        runAsNonRoot: false
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -27,7 +27,7 @@ spec:
             - -config.file=/etc/mimir.yaml
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
+            readOnlyRootFilesystem: false
             capabilities:
               drop:
                 - ALL

@@ -5,13 +5,13 @@ local selector = '{service_name="%s"}' % c.serviceName;
 {
   appLogs: selector,
   warningLogs: '%s | json | level="warn"' % selector,
-  requestLogs: '%s | json | message="Request completed"' % selector,
-  traceCorrelatedLogs: '%s |= "trace_id="' % selector,
+  requestLogs: '%s | json | message="http.request"' % selector,
+  traceCorrelatedLogs: '%s | json | trace_id!=""' % selector,
 
   errorCountLastHour: 'sum(count_over_time(%s | json | level="error" [1h]))' % selector,
   warningCountLastHour: 'sum(count_over_time(%s | json | level="warn" [1h]))' % selector,
-  requestCountLastHour: 'sum(count_over_time(%s | json | message="Request completed" [1h]))' % selector,
-  uniqueTraceIDsLastHour: 'count(count by (trace_id) (count_over_time(%s | json | trace_id!="" [1h])))' % selector,
+  requestCountLastHour: 'sum(count_over_time(%s | json | message="http.request" [1h]))' % selector,
+  uniqueTraceIDsLastHour: 'count(sum by (trace_id) (count_over_time(%s | json | trace_id!="" [1h])))' % selector,
 
   logVolumeError: 'sum(count_over_time(%s | json | level="error" [5m]))' % selector,
   logVolumeWarn: 'sum(count_over_time(%s | json | level="warn" [5m]))' % selector,

@@ -41,7 +41,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate({service_name=\"secure-observable-go-backend-starter-kit\"} |= \"trace_id=\" [5m]))",
+          "expr": "sum(rate({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" [5m]))",
           "queryType": "range",
           "refId": "A"
         }
@@ -123,7 +123,7 @@
       },
       "targets": [
         {
-          "expr": "count(count by (trace_id) (count_over_time({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" [1h])))",
+          "expr": "count(sum by (trace_id) (count_over_time({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" [1h])))",
           "queryType": "range",
           "refId": "A"
         }
@@ -164,7 +164,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" | message=\"Request completed\" [5m]))",
+          "expr": "sum(rate({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" | message=\"http.request\" [5m]))",
           "queryType": "range",
           "refId": "A"
         }
@@ -196,13 +196,13 @@
       },
       "targets": [
         {
-          "expr": "sum by (event) (rate({service_name=\"secure-observable-go-backend-starter-kit\"} |= \"trace_id=\" | json | event!=\"\" [5m]))",
-          "legendFormat": "{{event}}",
+          "expr": "sum by (path) (rate({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" | path!=\"\" [5m]))",
+          "legendFormat": "{{path}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Trace-Correlated Events by Type",
+      "title": "Trace-Correlated Request Paths",
       "type": "timeseries"
     },
     {
@@ -231,19 +231,25 @@
       },
       "targets": [
         {
-          "expr": "sum(rate({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" | level=\"error\" [5m]))",
-          "legendFormat": "error",
+          "expr": "sum(rate({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" | status >= 200 and status < 300 [5m]))",
+          "legendFormat": "2xx",
           "queryType": "range",
           "refId": "A"
         },
         {
-          "expr": "sum(rate({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" | level=\"warn\" [5m]))",
-          "legendFormat": "warn",
+          "expr": "sum(rate({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" | status >= 400 and status < 500 [5m]))",
+          "legendFormat": "4xx",
           "queryType": "range",
           "refId": "B"
+        },
+        {
+          "expr": "sum(rate({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" | status >= 500 and status < 600 [5m]))",
+          "legendFormat": "5xx",
+          "queryType": "range",
+          "refId": "C"
         }
       ],
-      "title": "Trace-Correlated Error/Warn Rate",
+      "title": "Trace-Correlated Status-Class Rate",
       "type": "timeseries"
     },
     {
@@ -269,7 +275,7 @@
       },
       "targets": [
         {
-          "expr": "{service_name=\"secure-observable-go-backend-starter-kit\"} |= \"trace_id=\"",
+          "expr": "{service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\"",
           "queryType": "range",
           "refId": "A"
         }

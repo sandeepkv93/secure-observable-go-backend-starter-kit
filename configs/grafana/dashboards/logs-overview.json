@@ -153,7 +153,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service_name=\"secure-observable-go-backend-starter-kit\"} | json | message=\"Request completed\" [1h]))",
+          "expr": "sum(count_over_time({service_name=\"secure-observable-go-backend-starter-kit\"} | json | message=\"http.request\" [1h]))",
           "queryType": "range",
           "refId": "A"
         }
@@ -194,7 +194,7 @@
       },
       "targets": [
         {
-          "expr": "count(count by (trace_id) (count_over_time({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" [1h])))",
+          "expr": "count(sum by (trace_id) (count_over_time({service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\" [1h])))",
           "queryType": "range",
           "refId": "A"
         }
@@ -355,7 +355,7 @@
       },
       "targets": [
         {
-          "expr": "{service_name=\"secure-observable-go-backend-starter-kit\"} | json | message=\"Request completed\"",
+          "expr": "{service_name=\"secure-observable-go-backend-starter-kit\"} | json | message=\"http.request\"",
           "refId": "A"
         }
       ],
@@ -420,7 +420,7 @@
       },
       "targets": [
         {
-          "expr": "{service_name=\"secure-observable-go-backend-starter-kit\"} |= \"trace_id=\"",
+          "expr": "{service_name=\"secure-observable-go-backend-starter-kit\"} | json | trace_id!=\"\"",
           "refId": "A"
         }
       ],
