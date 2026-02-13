@@ -4,5 +4,12 @@ kind: Kustomization
 resources:
   - ../prod-like
 
+labels:
+  - pairs:
+      app.kubernetes.io/environment: production
+
 patches:
   - path: patches/api-rollout-production.yaml
+  - path: patches/api-pdb-production.yaml
+  - path: patches/postgres-pdb-production.yaml
+  - path: patches/redis-pdb-production.yaml

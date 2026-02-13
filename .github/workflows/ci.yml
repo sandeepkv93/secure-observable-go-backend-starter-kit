@@ -53,6 +53,9 @@ jobs:
       - name: Validate rollout overlay policy
         run: bash scripts/ci/run_k8s_rollout_validate.sh
 
+      - name: Validate availability profiles policy
+        run: bash scripts/ci/run_k8s_availability_validate.sh
+
       - name: Validate observability alert check script
         run: bash scripts/ci/run_k8s_obs_alert_script_check.sh
 

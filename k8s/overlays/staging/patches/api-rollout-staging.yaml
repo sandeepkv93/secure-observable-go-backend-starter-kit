@@ -3,12 +3,12 @@ kind: Deployment
 metadata:
   name: secure-observable-api
 spec:
-  revisionHistoryLimit: 8
-  minReadySeconds: 20
-  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 6
+  minReadySeconds: 10
+  progressDeadlineSeconds: 420
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0
+      maxUnavailable: 1
       maxSurge: 1
   replicas: 2

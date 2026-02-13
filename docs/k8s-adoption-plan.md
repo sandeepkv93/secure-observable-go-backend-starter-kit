@@ -279,7 +279,8 @@ This order gets reliable Kubernetes parity quickly, then layers observability co
 - Availability hardening:
   - ✅ default API replica policy set for non-dev baseline (`prod-like`: replicas 2, maxUnavailable 0, maxSurge 1).
   - ✅ defined PDB strategy for stateful data services (`postgres` and `redis`: minAvailable 1 in prod-like).
-  - next: extend availability profiles for environment-specific maintenance windows (e.g., staging vs prod).
+  - ✅ added environment-specific maintenance policies: `staging` allows controlled disruption (`maxUnavailable: 1` on API/Postgres/Redis PDBs, faster rollout window), while `production` enforces strict API disruption control (`maxUnavailable: 0`, API PDB `minAvailable: 2`, longer readiness window).
+  - ✅ added CI OPA gate for availability profile policy validation (`run_k8s_availability_validate.sh`).
 - Rollout safety:
   - ✅ implemented staged rollout overlays by environment (`staging` and `production`) with guarded rollout windows.
   - ✅ added optional Argo Rollouts blue/green overlay and operational tasks (`deploy-rollout-bluegreen`, `rollout-status/promote/abort`).

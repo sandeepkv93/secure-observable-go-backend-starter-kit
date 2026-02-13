@@ -194,6 +194,10 @@ tasks:
     cmds:
       - bash scripts/ci/run_k8s_rollout_validate.sh
 
+  k8s:validate-availability-profiles:
+    cmds:
+      - bash scripts/ci/run_k8s_availability_validate.sh
+
   k8s:validate-obs-alert-script:
     cmds:
       - bash scripts/ci/run_k8s_obs_alert_script_check.sh

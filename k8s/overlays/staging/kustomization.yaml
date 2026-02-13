@@ -4,5 +4,12 @@ kind: Kustomization
 resources:
   - ../prod-like
 
+labels:
+  - pairs:
+      app.kubernetes.io/environment: staging
+
 patches:
   - path: patches/api-rollout-staging.yaml
+  - path: patches/api-pdb-staging.yaml
+  - path: patches/postgres-pdb-staging.yaml
+  - path: patches/redis-pdb-staging.yaml

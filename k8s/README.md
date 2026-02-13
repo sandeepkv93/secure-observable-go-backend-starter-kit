@@ -122,6 +122,7 @@ ClusterSecretStore overlays (pick exactly one auth mode per cluster):
 ```bash
 task k8s:validate-secret-stores
 task k8s:validate-rollout-overlay
+task k8s:validate-availability-profiles
 task k8s:validate-obs-alert-script
 # AWS (recommended identity mode)
 task k8s:apply-secret-store-aws-irsa
@@ -256,9 +257,13 @@ prod-like availability defaults:
   - Redis: `minAvailable: 1`
 
 staged rollout strategy:
-- `staging` overlay: API `replicas: 2`, `minReadySeconds: 20`, `progressDeadlineSeconds: 600`.
-- `production` overlay: API `replicas: 3`, `minReadySeconds: 30`, `progressDeadlineSeconds: 900`.
-- both keep `maxUnavailable: 0` and `maxSurge: 1` to avoid capacity drops during rollout.
+- `staging` overlay: API `replicas: 2`, `minReadySeconds: 10`, `progressDeadlineSeconds: 420`, `maxUnavailable: 1`, `maxSurge: 1` for maintenance-friendly velocity.
+- `production` overlay: API `replicas: 3`, `minReadySeconds: 30`, `progressDeadlineSeconds: 900`, `maxUnavailable: 0`, `maxSurge: 1` for no-downtime rollout posture.
+
+environment-specific disruption policy:
+- `staging` overlay sets PDB `maxUnavailable: 1` for API, Postgres, and Redis to permit controlled maintenance disruption.
+- `production` overlay sets API PDB `minAvailable: 2` and keeps Postgres/Redis PDB `minAvailable: 1`.
+- CI enforces these profiles with `task k8s:validate-availability-profiles`.
 
 
 optional Argo Rollouts blue/green:
