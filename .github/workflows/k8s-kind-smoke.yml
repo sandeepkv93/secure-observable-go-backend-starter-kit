@@ -9,6 +9,15 @@ on:
       - 'Taskfile.yaml'
       - 'Dockerfile'
       - '.github/workflows/k8s-kind-smoke.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'k8s/**'
+      - 'taskfiles/k8s.yaml'
+      - 'Taskfile.yaml'
+      - 'Dockerfile'
+      - '.github/workflows/k8s-kind-smoke.yml'
 
 jobs:
   smoke:

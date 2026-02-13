@@ -4,6 +4,8 @@ set -euo pipefail
 CLUSTER_NAME="${KIND_CLUSTER_NAME:-secure-observable}"
 KIND_CONFIG="${KIND_CONFIG:-k8s/kind-config.yaml}"
 INSTALL_METRICS_SERVER="${INSTALL_METRICS_SERVER:-false}"
+INGRESS_NGINX_VERSION="${INGRESS_NGINX_VERSION:-controller-v1.11.3}"
+METRICS_SERVER_VERSION="${METRICS_SERVER_VERSION:-v0.7.2}"
 
 require_cmd() {
   local cmd="$1"
@@ -18,14 +20,20 @@ cluster_exists() {
 }
 
 install_ingress_nginx() {
-  echo "Installing ingress-nginx..."
-  kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+  local manifest_url
+  manifest_url="https://raw.githubusercontent.com/kubernetes/ingress-nginx/${INGRESS_NGINX_VERSION}/deploy/static/provider/kind/deploy.yaml"
+
+  echo "Installing ingress-nginx (${INGRESS_NGINX_VERSION})..."
+  kubectl apply -f "${manifest_url}"
   kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=240s
 }
 
 install_metrics_server() {
-  echo "Installing metrics-server..."
-  kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+  local manifest_url
+  manifest_url="https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICS_SERVER_VERSION}/components.yaml"
+
+  echo "Installing metrics-server (${METRICS_SERVER_VERSION})..."
+  kubectl apply -f "${manifest_url}"
   kubectl -n kube-system rollout status deployment/metrics-server --timeout=240s
 }
 
