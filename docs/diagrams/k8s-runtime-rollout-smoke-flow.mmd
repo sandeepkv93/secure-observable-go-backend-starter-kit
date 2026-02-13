@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant GH as GitHub Actions\nk8s-kind-smoke
+    participant KIND as Kind Cluster
+    participant ARGO as Argo Rollouts\nController + Plugin
+    participant APP as API + DB + Redis
+    participant OBS as OTel + Mimir/Loki/Tempo/Grafana
+    participant LG as cmd/loadgen
+    participant PRE as rollout-precheck.sh
+    participant ART as Evidence Artifact
+
+    GH->>KIND: task k8s:setup-full
+    GH->>ARGO: Install plugin + controller
+    GH->>KIND: task k8s:deploy-observability-ci
+    GH->>KIND: task k8s:deploy-rollout-bluegreen
+    GH->>ARGO: rollout restart secure-observable-api
+
+    GH->>LG: Generate traffic against API\n(health + business requests)
+    LG->>APP: Request stream
+    APP-->>OBS: Emit metrics/logs/traces
+
+    GH->>PRE: Run runtime precheck\n(with obs gate enabled)
+    PRE->>ARGO: Verify rollout not degraded
+    PRE->>APP: Verify preview health endpoints
+    PRE->>KIND: Check restart budget
+    PRE->>OBS: Query SLO indicators via Mimir
+
+    alt all checks pass
+        PRE-->>GH: PASSED
+        GH->>ART: Upload rollout + SLO evidence files
+    else any check fails
+        PRE-->>GH: FAILED
+        GH->>ART: Upload failure evidence for triage
+    end

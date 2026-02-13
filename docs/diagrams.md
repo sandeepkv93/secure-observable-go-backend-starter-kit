@@ -529,3 +529,120 @@ flowchart LR
 ```
 
 Source: `docs/diagrams/tooling-flow.mmd`
+
+## Kubernetes Overlay Topology
+
+```mermaid
+flowchart TB
+    BASE[k8s/base\nAPI + Postgres + Redis + Ingress]
+
+    DEV[k8s/overlays/development]
+    PRODLIKE[k8s/overlays/prod-like]
+    STAGING[k8s/overlays/staging]
+    PRODUCTION[k8s/overlays/production]
+    ROLLOUT[k8s/overlays/rollouts/blue-green]
+
+    OBSBASE[k8s/overlays/observability-base]
+    OBS[k8s/overlays/observability]
+    OBSDEV[k8s/overlays/observability/dev]
+    OBSCI[k8s/overlays/observability/ci]
+    OBSPROD[k8s/overlays/observability/prod-like]
+    OBSHA[k8s/overlays/observability/prod-like-ha]
+
+    EXTSEC[k8s/overlays/secrets/external-secrets]
+    STORES[k8s/overlays/secrets/stores/*]
+
+    BASE --> DEV
+    BASE --> PRODLIKE
+    PRODLIKE --> STAGING
+    PRODLIKE --> PRODUCTION
+    BASE --> ROLLOUT
+
+    OBSBASE --> OBS
+    OBS --> OBSDEV
+    OBS --> OBSCI
+    OBS --> OBSPROD
+    OBSPROD --> OBSHA
+
+    EXTSEC -.references.-> STORES
+
+    ROLLOUT --> API_SVC[activeService\nsecure-observable-api]
+    ROLLOUT --> PREVIEW_SVC[previewService\nsecure-observable-api-preview]
+```
+
+Source: `docs/diagrams/k8s-overlay-topology.mmd`
+
+## Runtime Kind Rollout Smoke Flow
+
+```mermaid
+sequenceDiagram
+    participant GH as GitHub Actions\nk8s-kind-smoke
+    participant KIND as Kind Cluster
+    participant ARGO as Argo Rollouts\nController + Plugin
+    participant APP as API + DB + Redis
+    participant OBS as OTel + Mimir/Loki/Tempo/Grafana
+    participant LG as cmd/loadgen
+    participant PRE as rollout-precheck.sh
+    participant ART as Evidence Artifact
+
+    GH->>KIND: task k8s:setup-full
+    GH->>ARGO: Install plugin + controller
+    GH->>KIND: task k8s:deploy-observability-ci
+    GH->>KIND: task k8s:deploy-rollout-bluegreen
+    GH->>ARGO: rollout restart secure-observable-api
+
+    GH->>LG: Generate traffic against API\n(health + business requests)
+    LG->>APP: Request stream
+    APP-->>OBS: Emit metrics/logs/traces
+
+    GH->>PRE: Run runtime precheck\n(with obs gate enabled)
+    PRE->>ARGO: Verify rollout not degraded
+    PRE->>APP: Verify preview health endpoints
+    PRE->>KIND: Check restart budget
+    PRE->>OBS: Query SLO indicators via Mimir
+
+    alt all checks pass
+        PRE-->>GH: PASSED
+        GH->>ART: Upload rollout + SLO evidence files
+    else any check fails
+        PRE-->>GH: FAILED
+        GH->>ART: Upload failure evidence for triage
+    end
+```
+
+Source: `docs/diagrams/k8s-runtime-rollout-smoke-flow.mmd`
+
+## Rollout Promotion Gate Decision Flow
+
+```mermaid
+flowchart TD
+    Start[Promote Action Requested] --> ProdCheck{ROLLOUT_ENV == production?}
+
+    ProdCheck -->|yes| Confirm{ALLOW_PROD_ROLLOUTS == true?}
+    ProdCheck -->|no| Gates
+
+    Confirm -->|no| StopProd[Stop: Refuse production promote]
+    Confirm -->|yes| Gates
+
+    Gates{SKIP_PROMOTION_GATES == true?}
+    Gates -->|yes| BreakGlass[Bypass prechecks\nAudit + incident note required]
+    Gates -->|no| Precheck[Run k8s/scripts/rollout-precheck.sh]
+
+    Precheck --> R1{Rollout phase degraded?}
+    R1 -->|yes| Abort1[Abort: degraded rollout]
+    R1 -->|no| R2{Preview health endpoints pass?}
+
+    R2 -->|no| Abort2[Abort: health check failure]
+    R2 -->|yes| R3{Restart budget exceeded?}
+
+    R3 -->|yes| Abort3[Abort: restart budget breach]
+    R3 -->|no| R4{Observability SLO gate pass?}
+
+    R4 -->|no| Abort4[Abort: SLO threshold breach]
+    R4 -->|yes| Promote[Execute rollout promote]
+
+    BreakGlass --> Promote
+    Promote --> Done[Promotion initiated]
+```
+
+Source: `docs/diagrams/rollout-promotion-gate-decision.mmd`

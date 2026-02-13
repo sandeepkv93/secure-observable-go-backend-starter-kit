@@ -1,0 +1,28 @@
+flowchart TD
+    Start[Promote Action Requested] --> ProdCheck{ROLLOUT_ENV == production?}
+
+    ProdCheck -->|yes| Confirm{ALLOW_PROD_ROLLOUTS == true?}
+    ProdCheck -->|no| Gates
+
+    Confirm -->|no| StopProd[Stop: Refuse production promote]
+    Confirm -->|yes| Gates
+
+    Gates{SKIP_PROMOTION_GATES == true?}
+    Gates -->|yes| BreakGlass[Bypass prechecks\nAudit + incident note required]
+    Gates -->|no| Precheck[Run k8s/scripts/rollout-precheck.sh]
+
+    Precheck --> R1{Rollout phase degraded?}
+    R1 -->|yes| Abort1[Abort: degraded rollout]
+    R1 -->|no| R2{Preview health endpoints pass?}
+
+    R2 -->|no| Abort2[Abort: health check failure]
+    R2 -->|yes| R3{Restart budget exceeded?}
+
+    R3 -->|yes| Abort3[Abort: restart budget breach]
+    R3 -->|no| R4{Observability SLO gate pass?}
+
+    R4 -->|no| Abort4[Abort: SLO threshold breach]
+    R4 -->|yes| Promote[Execute rollout promote]
+
+    BreakGlass --> Promote
+    Promote --> Done[Promotion initiated]

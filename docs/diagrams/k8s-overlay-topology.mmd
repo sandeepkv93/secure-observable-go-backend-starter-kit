@@ -1,0 +1,35 @@
+flowchart TB
+    BASE[k8s/base\nAPI + Postgres + Redis + Ingress]
+
+    DEV[k8s/overlays/development]
+    PRODLIKE[k8s/overlays/prod-like]
+    STAGING[k8s/overlays/staging]
+    PRODUCTION[k8s/overlays/production]
+    ROLLOUT[k8s/overlays/rollouts/blue-green]
+
+    OBSBASE[k8s/overlays/observability-base]
+    OBS[k8s/overlays/observability]
+    OBSDEV[k8s/overlays/observability/dev]
+    OBSCI[k8s/overlays/observability/ci]
+    OBSPROD[k8s/overlays/observability/prod-like]
+    OBSHA[k8s/overlays/observability/prod-like-ha]
+
+    EXTSEC[k8s/overlays/secrets/external-secrets]
+    STORES[k8s/overlays/secrets/stores/*]
+
+    BASE --> DEV
+    BASE --> PRODLIKE
+    PRODLIKE --> STAGING
+    PRODLIKE --> PRODUCTION
+    BASE --> ROLLOUT
+
+    OBSBASE --> OBS
+    OBS --> OBSDEV
+    OBS --> OBSCI
+    OBS --> OBSPROD
+    OBSPROD --> OBSHA
+
+    EXTSEC -.references.-> STORES
+
+    ROLLOUT --> API_SVC[activeService\nsecure-observable-api]
+    ROLLOUT --> PREVIEW_SVC[previewService\nsecure-observable-api-preview]
