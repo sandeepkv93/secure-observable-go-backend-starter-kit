@@ -30,12 +30,13 @@ with generated outputs from Jsonnet/Grafonnet sources, while keeping runtime beh
 3. Pin target: `github.com/grafana/grafonnet/gen/grafonnet-v10.4.0@main` (aligned with Grafana `10.4.5` image).
 4. Generated JSON committed: yes (required by current deploy model).
 5. Deployment paths unchanged: yes (no k8s/docker path churn).
+6. Vendor strategy: do not commit `vendor/**`; keep `jsonnetfile.lock.json`, ignore `vendor/`, and bootstrap via `jb install` in generator/check scripts.
 
 ## Target Layout
 Create:
 - `configs/grafana/jsonnet/jsonnetfile.json`
 - `configs/grafana/jsonnet/jsonnetfile.lock.json`
-- `configs/grafana/jsonnet/vendor/**`
+- `configs/grafana/jsonnet/.gitignore` (ignores `vendor/`)
 - `configs/grafana/jsonnet/g.libsonnet`
 - `configs/grafana/jsonnet/lib/dashboard.libsonnet`
 - `configs/grafana/jsonnet/lib/panels.libsonnet`
@@ -57,7 +58,7 @@ Keep existing outputs (generated):
 - `k8s/overlays/observability-base/configmaps/dashboards/*.json`
 
 ## Implementation Sequence
-1. Bootstrap Jsonnet toolchain and pinned grafonnet vendor tree.
+1. Bootstrap Jsonnet toolchain and pinned grafonnet dependencies via `jsonnetfile.lock.json` + on-demand `jb install`.
 2. Build reusable query/panel/dashboard helper modules.
 3. Author three dashboard Jsonnet definitions.
 4. Add deterministic generator writing both output directories.
