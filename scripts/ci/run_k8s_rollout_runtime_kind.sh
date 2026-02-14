@@ -95,10 +95,19 @@ main() {
   echo "runtime-kind: waiting for rollout to progress"
   kubectl argo rollouts get rollout "${ROLLOUT_NAME}" -n "${NAMESPACE}" >"${EVIDENCE_DIR}/rollout-get.txt"
 
-  local api_pf_pid mimir_pf_pid
+  local api_pf_pid="" mimir_pf_pid=""
+  cleanup_port_forwards() {
+    local pid
+    for pid in "${api_pf_pid:-}" "${mimir_pf_pid:-}"; do
+      if [[ -n "${pid}" ]]; then
+        kill "${pid}" >/dev/null 2>&1 || true
+      fi
+    done
+  }
+  trap cleanup_port_forwards EXIT
+
   api_pf_pid="$(start_port_forward svc/secure-observable-api "${API_PORT}:8080" "${EVIDENCE_DIR}/portforward-api.log")"
   mimir_pf_pid="$(start_port_forward svc/mimir "${MIMIR_PORT}:9009" "${EVIDENCE_DIR}/portforward-mimir.log")"
-  trap 'kill ${api_pf_pid} ${mimir_pf_pid} >/dev/null 2>&1 || true' EXIT
 
   wait_for_http "http://127.0.0.1:${API_PORT}/health/live" 30
   wait_for_http "http://127.0.0.1:${MIMIR_PORT}/ready" 40 || true

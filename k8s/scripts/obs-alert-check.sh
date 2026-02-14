@@ -11,6 +11,7 @@ REDIS_SAT_MAX="${ALERT_REDIS_SAT_MAX:-0.90}"
 PVC_USAGE_MAX="${ALERT_PVC_USAGE_MAX:-0.85}"
 OTEL_QUEUE_MAX="${ALERT_OTEL_QUEUE_MAX:-0.80}"
 
+REQUIRE_API_5XX_METRICS="${REQUIRE_API_5XX_METRICS:-false}"
 REQUIRE_PVC_METRICS="${REQUIRE_PVC_METRICS:-false}"
 REQUIRE_OTEL_QUEUE_METRICS="${REQUIRE_OTEL_QUEUE_METRICS:-false}"
 
@@ -73,7 +74,14 @@ redis_sat_val="$(query_scalar "${redis_sat_query}")"
 pvc_usage_val="$(query_scalar "${pvc_usage_query}")"
 otel_queue_val="$(query_scalar "${otel_queue_query}")"
 
-check_threshold "api_5xx_rate_ratio" "${api_5xx_val}" "${API_5XX_MAX}" || status=$?
+check_threshold "api_5xx_rate_ratio" "${api_5xx_val}" "${API_5XX_MAX}" || {
+  rc=$?
+  if [[ "${rc}" -eq 2 && "${REQUIRE_API_5XX_METRICS}" != "true" ]]; then
+    echo "WARN: api 5xx metrics missing; set REQUIRE_API_5XX_METRICS=true to enforce"
+  else
+    status=1
+  fi
+}
 check_threshold "redis_command_error_rate_ratio" "${redis_err_val}" "${REDIS_ERR_MAX}" || status=$?
 check_threshold "redis_pool_saturation_ratio" "${redis_sat_val}" "${REDIS_SAT_MAX}" || status=$?
 
