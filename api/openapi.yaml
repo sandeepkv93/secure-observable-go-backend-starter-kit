@@ -1067,6 +1067,142 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
 
+  /me/avatar:
+    post:
+      tags: [User]
+      summary: Upload profile avatar
+      description: Upload a profile picture (JPEG or PNG only, max 5MB). Content-Type is detected from file bytes to prevent spoofing. Requires authentication and CSRF token.
+      operationId: userUploadAvatar
+      security:
+        - accessTokenCookie: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Avatar image file (JPEG or PNG, max 5MB)
+      responses:
+        '200':
+          description: Avatar uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    required: [object_key, avatar_url]
+                    properties:
+                      object_key:
+                        type: string
+                        description: MinIO object key for the uploaded avatar
+                        example: avatars/user-123/a1b2c3d4-e5f6-7890-abcd-ef1234567890.jpg
+                      avatar_url:
+                        type: string
+                        format: uri
+                        description: Presigned URL to access the avatar (valid for 15 minutes)
+                        example: http://localhost:9000/avatars/user-123/a1b2c3d4-e5f6-7890-abcd-ef1234567890.jpg?X-Amz-Algorithm=...
+        '400':
+          description: Bad request (file too large, invalid content type, or missing file)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                fileTooLarge:
+                  value:
+                    success: false
+                    error:
+                      code: FILE_TOO_LARGE
+                      message: file size exceeds 5MB limit
+                invalidFileType:
+                  value:
+                    success: false
+                    error:
+                      code: INVALID_FILE_TYPE
+                      message: invalid file type, only JPEG and PNG images are allowed
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '413':
+          description: Request entity too large (body exceeds 6MB limit)
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [User]
+      summary: Delete profile avatar
+      description: Delete the current user's profile avatar from storage. Validates ownership before deletion.
+      operationId: userDeleteAvatar
+      security:
+        - accessTokenCookie: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [object_key]
+              properties:
+                object_key:
+                  type: string
+                  description: The MinIO object key of the avatar to delete
+                  example: avatars/user-123/a1b2c3d4-e5f6-7890-abcd-ef1234567890.jpg
+      responses:
+        '200':
+          description: Avatar deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    required: [message]
+                    properties:
+                      message:
+                        type: string
+                        example: avatar deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Forbidden - attempting to delete another user's avatar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: FORBIDDEN
+                  message: you do not have permission to delete this avatar
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /admin/users:
     get:
       tags: [Admin]
