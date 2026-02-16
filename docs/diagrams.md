@@ -13,6 +13,8 @@ flowchart LR
     Handlers --> Services[Service Layer]
     Services --> Repos[Repository Layer]
     Repos --> DB[(PostgreSQL)]
+    Services --> Redis[(Redis)]
+    Services --> MinIO[(MinIO/S3)]
 
     Router -. emits telemetry .-> OTel[OTel SDK]
     OTel --> Collector[OTel Collector]

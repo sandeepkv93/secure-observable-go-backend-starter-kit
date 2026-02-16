@@ -249,6 +249,11 @@ Configuration is loaded and validated in `internal/config/config.go`.
 - `SHUTDOWN_OBSERVABILITY_TIMEOUT` (default `8s`)
 - `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_SAMESITE`
 - `CORS_ALLOWED_ORIGINS`
+- `MINIO_ENDPOINT` (default `localhost:9000`)
+- `MINIO_ACCESS_KEY` (required for production profile)
+- `MINIO_SECRET_KEY` (required for production profile)
+- `MINIO_BUCKET_NAME` (default `avatars`)
+- `MINIO_USE_SSL` (default `false`)
 
 OTel:
 
@@ -317,6 +322,8 @@ User:
 - `GET /api/v1/me/sessions` (auth required)
 - `DELETE /api/v1/me/sessions/{session_id}` (auth + CSRF required)
 - `POST /api/v1/me/sessions/revoke-others` (auth + CSRF required)
+- `POST /api/v1/me/avatar` (auth + CSRF required, max 6MB body, accepts JPEG/PNG only)
+- `DELETE /api/v1/me/avatar` (auth + CSRF required)
 
 Admin (auth + permission checks):
 
