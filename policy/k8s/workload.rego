@@ -10,12 +10,14 @@ workload_kinds := {"Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob"}
 pod_security_exemptions := {
   "StatefulSet/postgres",
   "StatefulSet/redis",
+  "StatefulSet/minio",
   "Deployment/mimir",
 }
 
 # Containers that are temporarily exempt from strict container-level controls.
 # Format: <Kind>/<name>/<container>
 container_security_exemptions := {
+  "StatefulSet/minio/minio",
   "Deployment/mimir/mimir",
 }
 
