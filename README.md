@@ -37,13 +37,13 @@ This repository is a production-oriented Go backend starter that brings together
 
 ## Tech Stack
 
-- Language/runtime: Go `1.26.0`
-- HTTP framework: Chi (`github.com/go-chi/chi/v5`)
-- Persistence: PostgreSQL + GORM
-- Cache/rate limiting/idempotency backend: Redis
-- Auth: Google OAuth + cookie-based JWT (access/refresh)
-- Observability: OpenTelemetry + OTel Collector + Grafana + Tempo + Loki + Mimir
-- Tooling: Task, Bazel/Bazelisk, Gazelle, Wire, golangci-lint, gosec, govulncheck, gitleaks
+- Language/runtime: [![Go](https://img.shields.io/badge/Go-1.26.0-00ADD8?style=flat&logo=go&logoColor=white)](https://go.dev/)
+- HTTP framework: [![Chi](https://img.shields.io/badge/Chi-v5-1f6feb?style=flat)](https://github.com/go-chi/chi)
+- Persistence: [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![GORM](https://img.shields.io/badge/GORM-v2-00ADD8?style=flat&logo=go&logoColor=white)](https://gorm.io/)
+- Cache/rate limiting/idempotency backend: [![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io/)
+- Auth: [![Google OAuth](https://img.shields.io/badge/Google%20OAuth-Enabled-4285F4?style=flat&logo=google&logoColor=white)](https://developers.google.com/identity/protocols/oauth2) [![JWT](https://img.shields.io/badge/JWT-Access%20%2B%20Refresh-000000?style=flat&logo=jsonwebtokens&logoColor=white)](https://jwt.io/)
+- Observability: [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Enabled-6929C4?style=flat&logo=opentelemetry&logoColor=white)](https://opentelemetry.io/) [![OTel Collector](https://img.shields.io/badge/OTel%20Collector-Included-425CC7?style=flat)](https://opentelemetry.io/docs/collector/) [![Grafana](https://img.shields.io/badge/Grafana-Stack-F46800?style=flat&logo=grafana&logoColor=white)](https://grafana.com/) [![Tempo](https://img.shields.io/badge/Tempo-Traces-F46800?style=flat)](https://grafana.com/oss/tempo/) [![Loki](https://img.shields.io/badge/Loki-Logs-F46800?style=flat)](https://grafana.com/oss/loki/) [![Mimir](https://img.shields.io/badge/Mimir-Metrics-F46800?style=flat)](https://grafana.com/oss/mimir/)
+- Tooling: [![Task](https://img.shields.io/badge/Task-Runner-4A90E2?style=flat)](https://taskfile.dev/) [![Bazelisk](https://img.shields.io/badge/Bazelisk-Bazel%209.0.0-43A047?style=flat&logo=bazel&logoColor=white)](https://github.com/bazelbuild/bazelisk) [![Gazelle](https://img.shields.io/badge/Gazelle-Build%20files-76D275?style=flat)](https://github.com/bazelbuild/bazel-gazelle) [![Wire](https://img.shields.io/badge/Wire-DI-00ADD8?style=flat&logo=go&logoColor=white)](https://github.com/google/wire) [![golangci-lint](https://img.shields.io/badge/golangci--lint-Enabled-00ADD8?style=flat)](https://golangci-lint.run/) [![gosec](https://img.shields.io/badge/gosec-Enabled-5C2D91?style=flat)](https://github.com/securego/gosec) [![govulncheck](https://img.shields.io/badge/govulncheck-Enabled-007D9C?style=flat)](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) [![gitleaks](https://img.shields.io/badge/gitleaks-Enabled-121212?style=flat)](https://github.com/gitleaks/gitleaks)
 
 ## Architecture at a Glance
 
