@@ -4,7 +4,6 @@
 [![Fuzz Nightly](https://github.com/sandeepkv93/everything-backend-starter-kit/actions/workflows/fuzz-nightly.yml/badge.svg)](https://github.com/sandeepkv93/everything-backend-starter-kit/actions/workflows/fuzz-nightly.yml)
 [![K8s Kind Smoke](https://github.com/sandeepkv93/everything-backend-starter-kit/actions/workflows/k8s-kind-smoke.yml/badge.svg)](https://github.com/sandeepkv93/everything-backend-starter-kit/actions/workflows/k8s-kind-smoke.yml)
 [![Go Version](https://img.shields.io/badge/Go-1.26.0-00ADD8?style=flat&logo=go)](https://go.dev/)
-[![Go Reference](https://pkg.go.dev/badge/github.com/sandeepkv93/everything-backend-starter-kit.svg)](https://pkg.go.dev/github.com/sandeepkv93/everything-backend-starter-kit)
 [![Bazel Version](https://img.shields.io/badge/Bazel-9.0.0-43A047?style=flat&logo=bazel)](https://bazel.build/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
