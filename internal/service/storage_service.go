@@ -141,9 +141,9 @@ func (s *MinIOStorageService) UploadAvatar(ctx context.Context, userID uint, fil
 
 	// Prepare metadata
 	metadata := map[string]string{
-		"Content-Type": normalizedDetectedType,
-		"User-ID":      fmt.Sprintf("%d", userID),
-		"Uploaded-At":  time.Now().UTC().Format(time.RFC3339),
+		"Detected-Content-Type": normalizedDetectedType,
+		"User-ID":               fmt.Sprintf("%d", userID),
+		"Uploaded-At":           time.Now().UTC().Format(time.RFC3339),
 	}
 
 	// Upload file

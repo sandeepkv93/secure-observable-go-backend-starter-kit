@@ -23,6 +23,7 @@ use_repo(
     "com_github_minio_minio_go_v7",
     "com_github_redis_go_redis_v9",
     "com_github_spf13_cobra",
+    "com_github_testcontainers_testcontainers_go",
     "io_gorm_driver_postgres",
     "io_gorm_driver_sqlite",
     "io_gorm_gorm",

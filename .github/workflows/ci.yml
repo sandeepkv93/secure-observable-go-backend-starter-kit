@@ -100,6 +100,18 @@ jobs:
       - name: Run direct CI checks
         run: bash scripts/ci/run_all.sh
 
+  integration-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run avatar MinIO integration smoke
+        run: go test ./test/integration -run TestAvatar -count=1
+
   migration-smoke:
     runs-on: ubuntu-latest
     services:

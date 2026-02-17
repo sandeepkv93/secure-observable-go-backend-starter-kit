@@ -86,6 +86,7 @@ type authTestServerOptions struct {
 	cfgOverride    func(cfg *config.Config)
 	verifyNotifier service.EmailVerificationNotifier
 	resetNotifier  service.PasswordResetNotifier
+	storageSvc     service.StorageService
 	adminListCache service.AdminListCacheStore
 	negativeCache  service.NegativeLookupCacheStore
 	rbacPermCache  service.RBACPermissionCacheStore
@@ -359,7 +360,7 @@ func newAuthTestServerWithOptions(t *testing.T, opts authTestServerOptions) (str
 	}, jwtMgr)
 
 	authHandler := handler.NewAuthHandler(authSvc, abuseGuard, cookieMgr, bypassEvaluator, "0123456789abcdef0123456789abcdef", cfg.JWTRefreshTTL)
-	userHandler := handler.NewUserHandler(userSvc, sessionSvc, nil)
+	userHandler := handler.NewUserHandler(userSvc, sessionSvc, opts.storageSvc)
 	adminUserSvc := opts.adminUserSvc
 	if adminUserSvc == nil {
 		adminUserSvc = userSvc

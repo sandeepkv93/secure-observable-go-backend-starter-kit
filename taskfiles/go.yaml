@@ -81,6 +81,10 @@ tasks:
     cmds:
       - go test ./test/integration -run TestIdempotency -v
 
+  test:avatar-storage:
+    cmds:
+      - go test ./test/integration -run TestAvatar -v
+
   test:redis-race:
     cmds:
       - go test ./test/integration -run 'TestRedisRateLimiterConcurrentBurstHonorsLimit|TestRedisIdempotencyConcurrentInProgressAndReplayConsistency' -v
