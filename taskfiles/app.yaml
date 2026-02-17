@@ -52,7 +52,15 @@ tasks:
   backup-db:
     desc: "Alias for integration:backup-db"
     cmds:
-      - task integration:backup-db FILE={{.FILE}}
+      - |
+        bash -ec '
+          file="{{.FILE}}"
+          if [ -z "$file" ] || [ "$file" = "<no value>" ]; then
+            task integration:backup-db
+          else
+            task integration:backup-db FILE="$file"
+          fi
+        '
 
   restore-db:
     desc: "Alias for integration:restore-db"
