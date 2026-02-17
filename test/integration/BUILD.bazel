@@ -1,4 +1,4 @@
-load("@rules_go//go:def.bzl", "go_test")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_test(
     name = "integration_test",
@@ -7,16 +7,15 @@ go_test(
         "admin_list_pagination_test.go",
         "admin_rbac_mutation_matrix_test.go",
         "admin_rbac_write_test.go",
-        "avatar_storage_test.go",
         "audit_taxonomy_test.go",
         "auth_abuse_test.go",
         "auth_google_oauth_test.go",
         "auth_lifecycle_test.go",
         "auth_middleware_test.go",
+        "avatar_storage_test.go",
         "email_verification_test.go",
         "health_endpoints_test.go",
         "idempotency_test.go",
-        "minio_testcontainer_helper.go",
         "password_reset_test.go",
         "problem_details_test.go",
         "rate_limit_test.go",
@@ -25,6 +24,7 @@ go_test(
         "redis_race_integration_test.go",
         "session_management_test.go",
     ],
+    embed = [":integration"],
     deps = [
         "//internal/config",
         "//internal/database",
@@ -36,14 +36,24 @@ go_test(
         "//internal/security",
         "//internal/service",
         "@com_github_go_chi_chi_v5//:chi",
-        "@com_github_minio_minio_go_v7//:minio-go",
-        "@com_github_minio_minio_go_v7//pkg/credentials",
         "@com_github_redis_go_redis_v9//:go-redis",
-        "@com_github_testcontainers_testcontainers_go//:testcontainers-go",
-        "@com_github_testcontainers_testcontainers_go//wait",
         "@io_gorm_driver_sqlite//:sqlite",
         "@io_gorm_gorm//:gorm",
         "@io_gorm_gorm//logger",
         "@org_golang_x_oauth2//:oauth2",
+    ],
+)
+
+go_library(
+    name = "integration",
+    srcs = ["minio_testcontainer_helper.go"],
+    importpath = "github.com/sandeepkv93/everything-backend-starter-kit/test/integration",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/service",
+        "@com_github_minio_minio_go_v7//:minio-go",
+        "@com_github_minio_minio_go_v7//pkg/credentials",
+        "@com_github_testcontainers_testcontainers_go//:testcontainers-go",
+        "@com_github_testcontainers_testcontainers_go//wait",
     ],
 )
