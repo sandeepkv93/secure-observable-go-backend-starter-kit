@@ -100,9 +100,23 @@ tasks:
       - go run ./cmd/seed verify-local-email
 
   hooks-install:
+    desc: "Install and configure pre-commit hooks"
     cmds:
-      - git config core.hooksPath .githooks
-      - chmod +x .githooks/pre-commit .githooks/pre-push
+      - |
+        bash -ec '
+          if ! command -v pre-commit >/dev/null 2>&1; then
+            echo "hooks-install: installing pre-commit via python3 -m pip --user"
+            python3 -m pip install --user --break-system-packages pre-commit
+          fi
+          git config --unset core.hooksPath || true
+          python3 -m pre_commit install --install-hooks --hook-type pre-commit --hook-type pre-push
+          echo "hooks-install: pre-commit installed in .git/hooks"
+        '
+
+  hooks-run-all:
+    desc: "Run pre-commit hooks across all files"
+    cmds:
+      - python3 -m pre_commit run --all-files
 
   docker-up:
     cmds:

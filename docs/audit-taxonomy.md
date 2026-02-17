@@ -81,4 +81,3 @@ Trace-correlated audit events:
 ```logql
 {service_name="everything-backend-starter-kit"} | json | trace_id!="" | event_name=~"(auth|admin|session)\\..*"
 ```
-

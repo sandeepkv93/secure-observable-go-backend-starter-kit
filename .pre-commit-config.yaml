@@ -1,0 +1,50 @@
+minimum_pre_commit_version: "3.7.0"
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: bash -ec 'gofmt -w "$@"' --
+        language: system
+        types: [go]
+      - id: goimports
+        name: goimports
+        entry: bash -ec 'GOTOOLCHAIN=go1.26.0 go run golang.org/x/tools/cmd/goimports@v0.38.0 -w "$@"' --
+        language: system
+        types: [go]
+      - id: go-mod-tidy
+        name: go mod tidy check
+        entry: bash -ec 'GOTOOLCHAIN=go1.26.0 go mod tidy && git diff --exit-code go.mod go.sum'
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash -ec 'mkdir -p ./bin && GOBIN="$(pwd)/bin" GOTOOLCHAIN=go1.26.0 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0 && GOTOOLCHAIN=go1.26.0 ./bin/golangci-lint run --config .golangci.yml'
+        language: system
+        pass_filenames: false
+      - id: hadolint
+        name: hadolint
+        entry: bash -ec 'for f in "$@"; do docker run --rm -i hadolint/hadolint:v2.14.0 < "$f"; done' --
+        language: system
+        files: '(^|/)(Dockerfile|.*\.Dockerfile)$'
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        args: ["-c", ".yamllint.yml"]
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]

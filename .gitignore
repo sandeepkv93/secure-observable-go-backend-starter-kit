@@ -2,6 +2,7 @@
 .secrets.k8s.app.env
 .codex/
 .agent-cache/
+.venv/
 bin/
 dist/
 coverage.out

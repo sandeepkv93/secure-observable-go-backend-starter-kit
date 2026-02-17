@@ -556,14 +556,22 @@ Pipeline steps:
 Install repository hooks:
 
 - `task hooks-install`
+- `task hooks-run-all`
 
 Hooks:
 
 - `.githooks/pre-commit`
-  - formats staged `.go` files with `gofmt`
-  - runs `go mod tidy`
+  - delegates to `pre-commit` when available
+  - fallback behavior formats staged `.go` files with `gofmt` and runs `go mod tidy`
 - `.githooks/pre-push`
+  - runs `pre-commit run --hook-stage pre-push --all-files` when available
   - runs `bash scripts/ci/run_all.sh`
+
+Pre-commit usage:
+
+- `task hooks-run-all`
+- `pre-commit run --all-files` (if pre-commit is already on PATH)
+- Hook suite: `gofmt`, `goimports`, `go mod tidy`, `golangci-lint`, `hadolint`, `yamllint`, `detect-secrets`
 
 ## Local Development Stack
 

@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if command -v pre-commit >/dev/null 2>&1; then
+  echo "pre-push: running pre-commit suite"
+  pre-commit run --hook-stage pre-push --all-files
+fi
+
 echo "pre-push: running CI checks"
 bash scripts/ci/run_all.sh

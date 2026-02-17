@@ -135,6 +135,24 @@ curl -sSf http://localhost:8080/health/live
 curl -sSf http://localhost:8080/health/ready
 ```
 
+### Pre-commit workflow
+
+Install hooks and local tooling:
+
+```bash
+task hooks-install
+```
+
+Run the full hook suite manually:
+
+```bash
+task hooks-run-all
+# or, if pre-commit is already on PATH:
+pre-commit run --all-files
+```
+
+Hook coverage includes Go formatting/linting (`gofmt`, `goimports`, `golangci-lint`, `go mod tidy`), Dockerfile linting (`hadolint`), YAML linting (`yamllint`), and secret scanning (`detect-secrets`).
+
 Endpoints:
 
 - API base URL: `http://localhost:8080`

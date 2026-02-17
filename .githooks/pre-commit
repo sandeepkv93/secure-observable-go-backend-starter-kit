@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if ! command -v go >/dev/null 2>&1; then
-  echo "pre-commit: go is required"
-  exit 1
+staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
+if [[ -n "${staged_files}" ]] && command -v pre-commit >/dev/null 2>&1; then
+  echo "pre-commit: delegating to pre-commit framework"
+  # shellcheck disable=SC2086
+  exec pre-commit run --hook-stage pre-commit --files ${staged_files}
 fi
 
 staged_go_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.go$' || true)"
