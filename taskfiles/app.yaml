@@ -52,7 +52,7 @@ tasks:
   backup-db:
     desc: "Alias for integration:backup-db"
     cmds:
-      - task integration:backup-db
+      - task integration:backup-db FILE={{.FILE}}
 
   restore-db:
     desc: "Alias for integration:restore-db"

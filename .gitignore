@@ -8,3 +8,4 @@ coverage.out
 *.log
 .DS_Store
 bazel-*
+backups/
