@@ -1,0 +1,319 @@
+@baseUrl = http://localhost:8080
+@apiBase = {{baseUrl}}/api/v1
+@json = application/json
+
+# VS Code REST Client collection for everything-backend-starter-kit
+# Extension: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+# Important: enable setting `rest-client.rememberCookiesForSubsequentRequests` so cookie auth works.
+
+@localEmail = admin@example.com
+@localName = Admin User
+@localPassword = ChangeMe123!@
+@newPassword = ChangeMe124!@
+
+@productId = 1
+@roleId = 1
+@permissionId = 1
+@userId = 1
+@featureFlagId = 1
+@featureFlagRuleId = 1
+@featureFlagKey = new_checkout
+@sessionId = 1
+
+### Health: live
+GET {{baseUrl}}/health/live
+
+### Health: ready
+GET {{baseUrl}}/health/ready
+
+### Auth: Google login redirect
+GET {{apiBase}}/auth/google/login
+
+### Auth: Google callback (manual test shape only)
+# Replace code/state with real values from OAuth provider flow.
+GET {{apiBase}}/auth/google/callback?code=replace-me&state=replace-me
+
+### Auth: local register (idempotent when idempotency middleware is enabled)
+# @name localRegister
+POST {{apiBase}}/auth/local/register
+Content-Type: {{json}}
+Idempotency-Key: register-{{$timestamp}}
+
+{
+  "email": "{{localEmail}}",
+  "name": "{{localName}}",
+  "password": "{{localPassword}}"
+}
+
+### Auth: local login
+# @name localLogin
+POST {{apiBase}}/auth/local/login
+Content-Type: {{json}}
+
+{
+  "email": "{{localEmail}}",
+  "password": "{{localPassword}}"
+}
+
+### Auth: local verify request
+POST {{apiBase}}/auth/local/verify/request
+Content-Type: {{json}}
+
+{
+  "email": "{{localEmail}}"
+}
+
+### Auth: local verify confirm
+POST {{apiBase}}/auth/local/verify/confirm
+Content-Type: {{json}}
+
+{
+  "token": "replace-with-token"
+}
+
+### Auth: local forgot password (idempotent when idempotency middleware is enabled)
+POST {{apiBase}}/auth/local/password/forgot
+Content-Type: {{json}}
+Idempotency-Key: forgot-{{$timestamp}}
+
+{
+  "email": "{{localEmail}}"
+}
+
+### Auth: local reset password
+POST {{apiBase}}/auth/local/password/reset
+Content-Type: {{json}}
+
+{
+  "token": "replace-with-token",
+  "new_password": "{{newPassword}}"
+}
+
+### Auth: set CSRF token from latest login/register response
+# Prefer localLogin response. If you use localRegister session response, change source path accordingly.
+@csrfToken = {{localLogin.response.body.data.csrf_token}}
+
+### Auth: refresh (CSRF protected)
+# @name refreshTokens
+POST {{apiBase}}/auth/refresh
+Content-Type: {{json}}
+X-CSRF-Token: {{csrfToken}}
+
+### Auth: update CSRF token after refresh
+@csrfToken = {{refreshTokens.response.body.data.csrf_token}}
+
+### Auth: change password (CSRF + auth cookie)
+POST {{apiBase}}/auth/local/change-password
+Content-Type: {{json}}
+X-CSRF-Token: {{csrfToken}}
+
+{
+  "current_password": "{{localPassword}}",
+  "new_password": "{{newPassword}}"
+}
+
+### Auth: logout (CSRF + auth cookie)
+POST {{apiBase}}/auth/logout
+Content-Type: {{json}}
+X-CSRF-Token: {{csrfToken}}
+
+### User: me profile
+GET {{apiBase}}/me
+
+### User: list sessions
+GET {{apiBase}}/me/sessions
+
+### User: revoke one session (CSRF + auth cookie)
+DELETE {{apiBase}}/me/sessions/{{sessionId}}
+X-CSRF-Token: {{csrfToken}}
+
+### User: revoke all other sessions (CSRF + auth cookie)
+POST {{apiBase}}/me/sessions/revoke-others
+X-CSRF-Token: {{csrfToken}}
+
+### User: upload avatar (CSRF + multipart)
+# Replace file path with an existing local PNG/JPEG file.
+POST {{apiBase}}/me/avatar
+X-CSRF-Token: {{csrfToken}}
+Content-Type: multipart/form-data; boundary=RestClientBoundary
+
+--RestClientBoundary
+Content-Disposition: form-data; name="avatar"; filename="avatar.png"
+Content-Type: image/png
+
+< ./replace-with-local-avatar.png
+--RestClientBoundary--
+
+### User: delete avatar (actual delete endpoint)
+DELETE {{apiBase}}/me/avatar
+Content-Type: {{json}}
+X-CSRF-Token: {{csrfToken}}
+
+{
+  "object_key": "replace-with-object-key"
+}
+
+### Feature flags: evaluate all for current user
+GET {{apiBase}}/feature-flags?environment=dev&org=acme
+
+### Feature flags: evaluate single key for current user
+GET {{apiBase}}/feature-flags/{{featureFlagKey}}?environment=dev&org=acme
+
+### Products: list
+GET {{apiBase}}/products?page=1&page_size=20
+
+### Products: get by id
+GET {{apiBase}}/products/{{productId}}
+
+### Products: create (requires products:write)
+# @name createProduct
+POST {{apiBase}}/products
+Content-Type: {{json}}
+
+{
+  "name": "Demo Product {{$timestamp}}",
+  "description": "Created from REST collection",
+  "price": 19.99
+}
+
+### Products: update (requires products:write)
+PUT {{apiBase}}/products/{{productId}}
+Content-Type: {{json}}
+
+{
+  "name": "Updated Product {{$timestamp}}",
+  "description": "Updated from REST collection",
+  "price": 24.5
+}
+
+### Products: delete (requires products:delete)
+DELETE {{apiBase}}/products/{{productId}}
+
+### Admin: list users (requires users:read)
+GET {{apiBase}}/admin/users?page=1&page_size=20&sort_by=created_at&sort_order=desc
+
+### Admin: set user roles (requires users:write; idempotent when enabled)
+PATCH {{apiBase}}/admin/users/{{userId}}/roles
+Content-Type: {{json}}
+Idempotency-Key: set-user-roles-{{$timestamp}}
+
+{
+  "role_ids": [1]
+}
+
+### Admin: list roles (requires roles:read)
+GET {{apiBase}}/admin/roles?page=1&page_size=20&sort_by=created_at&sort_order=desc
+
+### Admin: create role (requires roles:write; idempotent when enabled)
+# @name createRole
+POST {{apiBase}}/admin/roles
+Content-Type: {{json}}
+Idempotency-Key: create-role-{{$timestamp}}
+
+{
+  "name": "support_{{$timestamp}}",
+  "description": "Support role from REST collection",
+  "permissions": ["users:read"]
+}
+
+### Admin: update role (requires roles:write)
+PATCH {{apiBase}}/admin/roles/{{roleId}}
+Content-Type: {{json}}
+
+{
+  "name": "support_updated",
+  "description": "Updated from REST collection",
+  "permissions": ["users:read", "users:write"]
+}
+
+### Admin: delete role (requires roles:write)
+DELETE {{apiBase}}/admin/roles/{{roleId}}
+
+### Admin: list permissions (requires permissions:read)
+GET {{apiBase}}/admin/permissions?page=1&page_size=20&sort_by=created_at&sort_order=desc
+
+### Admin: create permission (requires permissions:write)
+# @name createPermission
+POST {{apiBase}}/admin/permissions
+Content-Type: {{json}}
+
+{
+  "resource": "reports",
+  "action": "read"
+}
+
+### Admin: update permission (requires permissions:write)
+PATCH {{apiBase}}/admin/permissions/{{permissionId}}
+Content-Type: {{json}}
+
+{
+  "resource": "reports",
+  "action": "write"
+}
+
+### Admin: delete permission (requires permissions:write)
+DELETE {{apiBase}}/admin/permissions/{{permissionId}}
+
+### Admin: sync RBAC seed (requires roles:write)
+POST {{apiBase}}/admin/rbac/sync
+
+### Admin feature flags: list (requires feature_flags:read)
+GET {{apiBase}}/admin/feature-flags
+
+### Admin feature flags: get by id (requires feature_flags:read)
+GET {{apiBase}}/admin/feature-flags/{{featureFlagId}}
+
+### Admin feature flags: create (requires feature_flags:write)
+# @name createFeatureFlag
+POST {{apiBase}}/admin/feature-flags
+Content-Type: {{json}}
+
+{
+  "key": "{{featureFlagKey}}",
+  "description": "Feature flag from REST collection",
+  "enabled": true
+}
+
+### Admin feature flags: update (requires feature_flags:write)
+PATCH {{apiBase}}/admin/feature-flags/{{featureFlagId}}
+Content-Type: {{json}}
+
+{
+  "key": "{{featureFlagKey}}",
+  "description": "Updated feature flag from REST collection",
+  "enabled": false
+}
+
+### Admin feature flags: delete (requires feature_flags:write)
+DELETE {{apiBase}}/admin/feature-flags/{{featureFlagId}}
+
+### Admin feature flag rules: list (requires feature_flags:read)
+GET {{apiBase}}/admin/feature-flags/{{featureFlagId}}/rules
+
+### Admin feature flag rules: create (requires feature_flags:write)
+# @name createFeatureFlagRule
+POST {{apiBase}}/admin/feature-flags/{{featureFlagId}}/rules
+Content-Type: {{json}}
+
+{
+  "type": "role",
+  "match_value": "admin",
+  "percentage": 100,
+  "enabled": true,
+  "priority": 10
+}
+
+### Admin feature flag rules: update (requires feature_flags:write)
+PATCH {{apiBase}}/admin/feature-flags/{{featureFlagId}}/rules/{{featureFlagRuleId}}
+Content-Type: {{json}}
+
+{
+  "type": "role",
+  "match_value": "support_admin",
+  "percentage": 100,
+  "enabled": true,
+  "priority": 20
+}
+
+### Admin feature flag rules: delete (requires feature_flags:write)
+DELETE {{apiBase}}/admin/feature-flags/{{featureFlagId}}/rules/{{featureFlagRuleId}}
