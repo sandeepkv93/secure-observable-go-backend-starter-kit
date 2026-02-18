@@ -257,16 +257,18 @@ func matchesRule(rule domain.FeatureFlagRule, ctx FeatureFlagEvaluationContext) 
 func stablePercentBucket(flagID, userID uint) int {
 	src := fmt.Sprintf("%d:%d", flagID, userID)
 	sum := sha256.Sum256([]byte(src))
-	const bucketCount uint64 = 100
-	const maxUint64 = ^uint64(0)
-	limit := maxUint64 - (maxUint64 % bucketCount)
-	for i := 0; i+8 <= len(sum); i += 8 {
-		candidate := binary.BigEndian.Uint64(sum[i : i+8])
+	const bucketCount uint16 = 100
+	const maxUint16 = ^uint16(0)
+	// Rejection sampling removes modulo bias while keeping conversion ranges small and safe.
+	// 65536 mod 100 = 36, so we accept only values below 65500.
+	limit := maxUint16 - (maxUint16 % bucketCount)
+	for i := 0; i+2 <= len(sum); i += 2 {
+		candidate := binary.BigEndian.Uint16(sum[i : i+2])
 		if candidate < limit {
 			return int(candidate % bucketCount)
 		}
 	}
-	return int(binary.BigEndian.Uint64(sum[:8]) % bucketCount)
+	return int(binary.BigEndian.Uint16(sum[:2]) % bucketCount)
 }
 
 func normalizeAndValidateRule(rule *domain.FeatureFlagRule) error {

@@ -45,7 +45,7 @@ func (s *stubFeatureFlagRepo) CreateFlag(flag *domain.FeatureFlag) error {
 		s.flags = map[uint]domain.FeatureFlag{}
 	}
 	if flag.ID == 0 {
-		flag.ID = uint(len(s.flags) + 1)
+		flag.ID = nextFeatureFlagID(s.flags)
 	}
 	s.flags[flag.ID] = *flag
 	return nil
@@ -80,7 +80,7 @@ func (s *stubFeatureFlagRepo) CreateRule(rule *domain.FeatureFlagRule) error {
 	if !ok {
 		return repository.ErrFeatureFlagNotFound
 	}
-	rule.ID = uint(len(f.Rules) + 1)
+	rule.ID = nextFeatureFlagRuleID(f.Rules)
 	f.Rules = append(f.Rules, *rule)
 	s.flags[rule.FeatureFlagID] = f
 	return nil
@@ -114,6 +114,26 @@ func (s *stubFeatureFlagRepo) DeleteRule(flagID, ruleID uint) error {
 		}
 	}
 	return repository.ErrFeatureFlagRuleNotFound
+}
+
+func nextFeatureFlagID(flags map[uint]domain.FeatureFlag) uint {
+	var maxID uint
+	for id := range flags {
+		if id > maxID {
+			maxID = id
+		}
+	}
+	return maxID + 1
+}
+
+func nextFeatureFlagRuleID(rules []domain.FeatureFlagRule) uint {
+	var maxID uint
+	for _, rule := range rules {
+		if rule.ID > maxID {
+			maxID = rule.ID
+		}
+	}
+	return maxID + 1
 }
 
 func TestFeatureFlagServiceEvaluatePrecedence(t *testing.T) {
