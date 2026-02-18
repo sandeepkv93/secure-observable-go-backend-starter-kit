@@ -1,0 +1,87 @@
+@baseUrl = http://localhost:8080
+@apiBase = {{baseUrl}}/api/v1
+@json = application/json
+
+@localEmail = admin@example.com
+@localPassword = ChangeMe123!@
+@featureFlagKey = new_checkout
+@featureFlagId = 1
+@featureFlagRuleId = 1
+
+# Login for both evaluation and admin endpoints.
+### Login
+# @name loginLocal
+POST {{apiBase}}/auth/local/login
+Content-Type: {{json}}
+
+{
+  "email": "{{localEmail}}",
+  "password": "{{localPassword}}"
+}
+
+### Evaluate all feature flags for current user
+GET {{apiBase}}/feature-flags?environment=dev&org=acme
+
+### Evaluate one feature flag by key for current user
+GET {{apiBase}}/feature-flags/{{featureFlagKey}}?environment=dev&org=acme
+
+### Admin list feature flags (feature_flags:read)
+GET {{apiBase}}/admin/feature-flags
+
+### Admin get feature flag by id (feature_flags:read)
+GET {{apiBase}}/admin/feature-flags/{{featureFlagId}}
+
+### Admin create feature flag (feature_flags:write)
+# @name createFeatureFlag
+POST {{apiBase}}/admin/feature-flags
+Content-Type: {{json}}
+
+{
+  "key": "{{featureFlagKey}}",
+  "description": "Feature flag from split REST collection",
+  "enabled": true
+}
+
+### Admin update feature flag (feature_flags:write)
+PATCH {{apiBase}}/admin/feature-flags/{{featureFlagId}}
+Content-Type: {{json}}
+
+{
+  "key": "{{featureFlagKey}}",
+  "description": "Updated feature flag from split REST collection",
+  "enabled": false
+}
+
+### Admin delete feature flag (feature_flags:write)
+DELETE {{apiBase}}/admin/feature-flags/{{featureFlagId}}
+
+### Admin list rules (feature_flags:read)
+GET {{apiBase}}/admin/feature-flags/{{featureFlagId}}/rules
+
+### Admin create rule (feature_flags:write)
+# @name createFeatureFlagRule
+POST {{apiBase}}/admin/feature-flags/{{featureFlagId}}/rules
+Content-Type: {{json}}
+
+{
+  "type": "role",
+  "match_value": "admin",
+  "percentage": 100,
+  "enabled": true,
+  "priority": 10
+}
+
+### Admin update rule (feature_flags:write)
+PATCH {{apiBase}}/admin/feature-flags/{{featureFlagId}}/rules/{{featureFlagRuleId}}
+Content-Type: {{json}}
+
+{
+  "type": "role",
+  "match_value": "support_admin",
+  "percentage": 100,
+  "enabled": true,
+  "priority": 20
+}
+
+### Admin delete rule (feature_flags:write)
+DELETE {{apiBase}}/admin/feature-flags/{{featureFlagId}}/rules/{{featureFlagRuleId}}

@@ -1,0 +1,50 @@
+@baseUrl = http://localhost:8080
+@apiBase = {{baseUrl}}/api/v1
+@json = application/json
+
+@localEmail = admin@example.com
+@localName = Admin User
+@localPassword = ChangeMe123!@
+
+# Quickstart sequence to bootstrap auth cookies + CSRF token.
+# For full coverage, run files in this folder from 01..05.
+
+### Health live
+GET {{baseUrl}}/health/live
+
+### Health ready
+GET {{baseUrl}}/health/ready
+
+### Register (optional if user already exists)
+# @name registerLocal
+POST {{apiBase}}/auth/local/register
+Content-Type: {{json}}
+Idempotency-Key: quickstart-register-{{$timestamp}}
+
+{
+  "email": "{{localEmail}}",
+  "name": "{{localName}}",
+  "password": "{{localPassword}}"
+}
+
+### Login
+# @name loginLocal
+POST {{apiBase}}/auth/local/login
+Content-Type: {{json}}
+
+{
+  "email": "{{localEmail}}",
+  "password": "{{localPassword}}"
+}
+
+### Capture CSRF token from login response
+@csrfToken = {{loginLocal.response.body.data.csrf_token}}
+
+### Refresh (CSRF protected)
+# @name refreshTokens
+POST {{apiBase}}/auth/refresh
+Content-Type: {{json}}
+X-CSRF-Token: {{csrfToken}}
+
+### Update CSRF token after refresh
+@csrfToken = {{refreshTokens.response.body.data.csrf_token}}

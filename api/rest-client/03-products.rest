@@ -1,0 +1,48 @@
+@baseUrl = http://localhost:8080
+@apiBase = {{baseUrl}}/api/v1
+@json = application/json
+
+@localEmail = admin@example.com
+@localPassword = ChangeMe123!@
+@productId = 1
+
+# Requires user with products:* permissions.
+### Login
+# @name loginLocal
+POST {{apiBase}}/auth/local/login
+Content-Type: {{json}}
+
+{
+  "email": "{{localEmail}}",
+  "password": "{{localPassword}}"
+}
+
+### List products (products:read)
+GET {{apiBase}}/products?page=1&page_size=20
+
+### Get product by id (products:read)
+GET {{apiBase}}/products/{{productId}}
+
+### Create product (products:write)
+# @name createProduct
+POST {{apiBase}}/products
+Content-Type: {{json}}
+
+{
+  "name": "Demo Product {{$timestamp}}",
+  "description": "Created from split REST collection",
+  "price": 19.99
+}
+
+### Update product (products:write)
+PUT {{apiBase}}/products/{{productId}}
+Content-Type: {{json}}
+
+{
+  "name": "Updated Product {{$timestamp}}",
+  "description": "Updated from split REST collection",
+  "price": 24.50
+}
+
+### Delete product (products:delete)
+DELETE {{apiBase}}/products/{{productId}}

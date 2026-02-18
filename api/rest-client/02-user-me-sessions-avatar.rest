@@ -1,0 +1,58 @@
+@baseUrl = http://localhost:8080
+@apiBase = {{baseUrl}}/api/v1
+@json = application/json
+
+@localEmail = admin@example.com
+@localPassword = ChangeMe123!@
+@sessionId = 1
+@avatarPath = ./replace-with-local-avatar.png
+@avatarObjectKey = replace-with-object-key
+
+# Bootstrap auth for this file.
+### Login
+# @name loginLocal
+POST {{apiBase}}/auth/local/login
+Content-Type: {{json}}
+
+{
+  "email": "{{localEmail}}",
+  "password": "{{localPassword}}"
+}
+
+### Capture CSRF token
+@csrfToken = {{loginLocal.response.body.data.csrf_token}}
+
+### Me profile
+GET {{apiBase}}/me
+
+### List active sessions
+GET {{apiBase}}/me/sessions
+
+### Revoke one session (CSRF protected)
+DELETE {{apiBase}}/me/sessions/{{sessionId}}
+X-CSRF-Token: {{csrfToken}}
+
+### Revoke other sessions (CSRF protected)
+POST {{apiBase}}/me/sessions/revoke-others
+X-CSRF-Token: {{csrfToken}}
+
+### Upload avatar (CSRF protected)
+POST {{apiBase}}/me/avatar
+X-CSRF-Token: {{csrfToken}}
+Content-Type: multipart/form-data; boundary=RestClientBoundary
+
+--RestClientBoundary
+Content-Disposition: form-data; name="avatar"; filename="avatar.png"
+Content-Type: image/png
+
+< {{avatarPath}}
+--RestClientBoundary--
+
+### Delete avatar (CSRF protected)
+DELETE {{apiBase}}/me/avatar
+Content-Type: {{json}}
+X-CSRF-Token: {{csrfToken}}
+
+{
+  "object_key": "{{avatarObjectKey}}"
+}

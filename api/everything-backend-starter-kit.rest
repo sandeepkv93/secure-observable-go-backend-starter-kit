@@ -2,6 +2,16 @@
 @apiBase = {{baseUrl}}/api/v1
 @json = application/json
 
+# Monolithic collection (kept for backward compatibility).
+# For detailed, domain-split collections (including explicit RBAC coverage),
+# use files in `api/rest-client/`:
+# - 00-quickstart.rest
+# - 01-auth.rest
+# - 02-user-me-sessions-avatar.rest
+# - 03-products.rest
+# - 04-feature-flags.rest
+# - 05-admin-rbac.rest
+
 # VS Code REST Client collection for everything-backend-starter-kit
 # Extension: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
 # Important: enable setting `rest-client.rememberCookiesForSubsequentRequests` so cookie auth works.

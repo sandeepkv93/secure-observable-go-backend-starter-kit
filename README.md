@@ -137,21 +137,28 @@ curl -sSf http://localhost:8080/health/ready
 
 ### REST Client Collection (Manual API Verification)
 
-Use the checked-in VS Code REST Client collection to exercise auth, profile, products, feature flags, and admin RBAC flows end-to-end.
+Use the checked-in VS Code REST Client collections to exercise all APIs (including detailed RBAC/admin flows) end-to-end.
 
 1. Install the REST Client extension: `https://marketplace.visualstudio.com/items?itemName=humao.rest-client`
-2. Open `api/everything-backend-starter-kit.rest`
-3. Update variables at the top (`@baseUrl`, user credentials, IDs) for your local environment
+2. Open the detailed split collections in `api/rest-client/` (recommended):
+   - `00-quickstart.rest`
+   - `01-auth.rest`
+   - `02-user-me-sessions-avatar.rest`
+   - `03-products.rest`
+   - `04-feature-flags.rest`
+   - `05-admin-rbac.rest`
+3. Optionally use `api/everything-backend-starter-kit.rest` as a monolithic fallback
+4. Update variables at the top (`@baseUrl`, user credentials, IDs) for your local environment
 4. Run requests in sequence:
    - health checks
    - local login/register
    - CSRF-protected endpoints (`/auth/refresh`, `/auth/logout`, `/auth/local/change-password`, `/me/*` mutating routes)
-   - admin endpoints with a user that has required permissions
+   - admin RBAC endpoints with a user that has required permissions
 
 Notes:
 - Cookie-based auth is used, so enable REST Client cookie persistence (`rest-client.rememberCookiesForSubsequentRequests`).
 - Idempotency-key headers are included for routes that can be wrapped by idempotency middleware.
-- When routes change in `internal/http/router/router.go`, update `api/everything-backend-starter-kit.rest` in the same PR.
+- When routes change in `internal/http/router/router.go`, update `api/rest-client/*.rest` (and monolithic file if used) in the same PR.
 
 ### Pre-commit workflow
 

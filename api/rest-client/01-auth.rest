@@ -1,0 +1,104 @@
+@baseUrl = http://localhost:8080
+@apiBase = {{baseUrl}}/api/v1
+@json = application/json
+
+@localEmail = admin@example.com
+@localName = Admin User
+@localPassword = ChangeMe123!@
+@newPassword = ChangeMe124!@
+
+### Health live
+GET {{baseUrl}}/health/live
+
+### Health ready
+GET {{baseUrl}}/health/ready
+
+### Google OAuth login (redirect)
+GET {{apiBase}}/auth/google/login
+
+### Google OAuth callback (manual shape only)
+# Replace code/state with actual provider callback values.
+GET {{apiBase}}/auth/google/callback?code=replace-me&state=replace-me
+
+### Local register
+# @name localRegister
+POST {{apiBase}}/auth/local/register
+Content-Type: {{json}}
+Idempotency-Key: auth-register-{{$timestamp}}
+
+{
+  "email": "{{localEmail}}",
+  "name": "{{localName}}",
+  "password": "{{localPassword}}"
+}
+
+### Local login
+# @name localLogin
+POST {{apiBase}}/auth/local/login
+Content-Type: {{json}}
+
+{
+  "email": "{{localEmail}}",
+  "password": "{{localPassword}}"
+}
+
+### Local verify request
+POST {{apiBase}}/auth/local/verify/request
+Content-Type: {{json}}
+
+{
+  "email": "{{localEmail}}"
+}
+
+### Local verify confirm
+POST {{apiBase}}/auth/local/verify/confirm
+Content-Type: {{json}}
+
+{
+  "token": "replace-with-token"
+}
+
+### Local password forgot
+POST {{apiBase}}/auth/local/password/forgot
+Content-Type: {{json}}
+Idempotency-Key: auth-forgot-{{$timestamp}}
+
+{
+  "email": "{{localEmail}}"
+}
+
+### Local password reset
+POST {{apiBase}}/auth/local/password/reset
+Content-Type: {{json}}
+
+{
+  "token": "replace-with-token",
+  "new_password": "{{newPassword}}"
+}
+
+### Capture CSRF token from login
+@csrfToken = {{localLogin.response.body.data.csrf_token}}
+
+### Refresh token (CSRF + refresh cookie)
+# @name refreshTokens
+POST {{apiBase}}/auth/refresh
+Content-Type: {{json}}
+X-CSRF-Token: {{csrfToken}}
+
+### Update CSRF token after refresh
+@csrfToken = {{refreshTokens.response.body.data.csrf_token}}
+
+### Change password (run near end; clears auth cookies)
+POST {{apiBase}}/auth/local/change-password
+Content-Type: {{json}}
+X-CSRF-Token: {{csrfToken}}
+
+{
+  "current_password": "{{localPassword}}",
+  "new_password": "{{newPassword}}"
+}
+
+### Logout (run last; clears auth cookies)
+POST {{apiBase}}/auth/logout
+Content-Type: {{json}}
+X-CSRF-Token: {{csrfToken}}

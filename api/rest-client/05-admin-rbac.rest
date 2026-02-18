@@ -1,0 +1,88 @@
+@baseUrl = http://localhost:8080
+@apiBase = {{baseUrl}}/api/v1
+@json = application/json
+
+@localEmail = admin@example.com
+@localPassword = ChangeMe123!@
+@userId = 1
+@roleId = 1
+@permissionId = 1
+
+# Requires admin user with users:*, roles:*, permissions:* rights.
+### Login
+# @name loginLocal
+POST {{apiBase}}/auth/local/login
+Content-Type: {{json}}
+
+{
+  "email": "{{localEmail}}",
+  "password": "{{localPassword}}"
+}
+
+### List users (users:read)
+GET {{apiBase}}/admin/users?page=1&page_size=20&sort_by=created_at&sort_order=desc
+
+### Set user roles (users:write)
+PATCH {{apiBase}}/admin/users/{{userId}}/roles
+Content-Type: {{json}}
+Idempotency-Key: admin-user-roles-{{$timestamp}}
+
+{
+  "role_ids": [1]
+}
+
+### List roles (roles:read)
+GET {{apiBase}}/admin/roles?page=1&page_size=20&sort_by=created_at&sort_order=desc
+
+### Create role (roles:write)
+# @name createRole
+POST {{apiBase}}/admin/roles
+Content-Type: {{json}}
+Idempotency-Key: admin-role-create-{{$timestamp}}
+
+{
+  "name": "support_{{$timestamp}}",
+  "description": "Support role from split REST collection",
+  "permissions": ["users:read"]
+}
+
+### Update role (roles:write)
+PATCH {{apiBase}}/admin/roles/{{roleId}}
+Content-Type: {{json}}
+
+{
+  "name": "support_updated",
+  "description": "Updated from split REST collection",
+  "permissions": ["users:read", "users:write"]
+}
+
+### Delete role (roles:write)
+DELETE {{apiBase}}/admin/roles/{{roleId}}
+
+### List permissions (permissions:read)
+GET {{apiBase}}/admin/permissions?page=1&page_size=20&sort_by=created_at&sort_order=desc
+
+### Create permission (permissions:write)
+# @name createPermission
+POST {{apiBase}}/admin/permissions
+Content-Type: {{json}}
+
+{
+  "resource": "reports",
+  "action": "read"
+}
+
+### Update permission (permissions:write)
+PATCH {{apiBase}}/admin/permissions/{{permissionId}}
+Content-Type: {{json}}
+
+{
+  "resource": "reports",
+  "action": "write"
+}
+
+### Delete permission (permissions:write)
+DELETE {{apiBase}}/admin/permissions/{{permissionId}}
+
+### Sync RBAC seed state (roles:write)
+POST {{apiBase}}/admin/rbac/sync
