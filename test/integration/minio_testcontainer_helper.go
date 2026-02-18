@@ -17,7 +17,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-const defaultMinioTestImage = "docker.io/minio/minio:RELEASE.2024-02-17T01-15-57Z"
+const defaultMinioTestImage = "docker.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
 
 type minioIntegrationEnv struct {
 	endpoint string

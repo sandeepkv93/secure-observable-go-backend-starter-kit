@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: minio
-          image: quay.io/minio/minio:RELEASE.2024-02-17T01-15-57Z
+          image: docker.io/minio/minio
           imagePullPolicy: IfNotPresent
           command:
             - sh
