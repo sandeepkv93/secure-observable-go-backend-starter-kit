@@ -25,6 +25,7 @@ func Migrate(db *gorm.DB) error {
 		&domain.IdempotencyRecord{},
 		&domain.FeatureFlag{},
 		&domain.FeatureFlagRule{},
+		&domain.Product{},
 	)
 	observability.RecordDatabaseStartupDuration(context.Background(), "migrate", time.Since(start))
 	if err != nil {

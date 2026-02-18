@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/domain"
+	"github.com/sandeepkv93/everything-backend-starter-kit/internal/repository"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
 )
 
@@ -58,4 +59,12 @@ type FeatureFlagService interface {
 	CreateRule(ctx context.Context, rule *domain.FeatureFlagRule) error
 	UpdateRule(ctx context.Context, rule *domain.FeatureFlagRule) error
 	DeleteRule(ctx context.Context, flagID, ruleID uint) error
+}
+
+type ProductService interface {
+	Create(ctx context.Context, input CreateProductInput) (*domain.Product, error)
+	ListPaged(ctx context.Context, req repository.PageRequest) (repository.PageResult[domain.Product], error)
+	GetByID(ctx context.Context, id uint) (*domain.Product, error)
+	Update(ctx context.Context, id uint, input UpdateProductInput) (*domain.Product, error)
+	DeleteByID(ctx context.Context, id uint) error
 }

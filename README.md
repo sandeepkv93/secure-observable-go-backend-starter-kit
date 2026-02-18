@@ -169,6 +169,19 @@ Runtime feature toggles support user evaluation and RBAC-gated admin management.
 Rule matching precedence during evaluation:
 `user` > `role` > `org` > `environment` > `percent` > flag default.
 
+### Products Blueprint Module
+
+Sample `products` CRUD module demonstrates domain/repository/service/handler layering with RBAC-protected routes and paginated list responses.
+
+- Endpoints:
+  - `GET /api/v1/products` (requires `products:read`)
+  - `GET /api/v1/products/{id}` (requires `products:read`)
+  - `POST /api/v1/products` (requires `products:write`)
+  - `PUT /api/v1/products/{id}` (requires `products:write`)
+  - `DELETE /api/v1/products/{id}` (requires `products:delete`)
+- Pagination defaults:
+  - `page=1`, `page_size=20`, max `page_size=100`
+
 Endpoints:
 
 - API base URL: `http://localhost:8080`

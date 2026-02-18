@@ -21,6 +21,9 @@ var defaultPermissions = []domain.Permission{
 	{Resource: "permissions", Action: "write"},
 	{Resource: "feature_flags", Action: "read"},
 	{Resource: "feature_flags", Action: "write"},
+	{Resource: "products", Action: "read"},
+	{Resource: "products", Action: "write"},
+	{Resource: "products", Action: "delete"},
 }
 
 type RBACSyncReport struct {
@@ -74,7 +77,7 @@ func SeedSync(db *gorm.DB, bootstrapAdminEmail string) (*RBACSyncReport, error) 
 	}
 
 	var perms []domain.Permission
-	if err := db.Where("resource IN ?", []string{"users", "roles", "permissions", "feature_flags"}).Find(&perms).Error; err != nil {
+	if err := db.Where("resource IN ?", []string{"users", "roles", "permissions", "feature_flags", "products"}).Find(&perms).Error; err != nil {
 		observability.RecordDatabaseStartupEvent(context.Background(), "seed", "error")
 		return nil, err
 	}

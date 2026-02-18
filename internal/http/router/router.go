@@ -21,6 +21,7 @@ type Dependencies struct {
 	UserHandler                *handler.UserHandler
 	AdminHandler               *handler.AdminHandler
 	FeatureFlagHandler         *handler.FeatureFlagHandler
+	ProductHandler             *handler.ProductHandler
 	JWTManager                 *security.JWTManager
 	RBACService                service.RBACAuthorizer
 	PermissionResolver         service.PermissionResolver
@@ -130,6 +131,23 @@ func NewRouter(dep Dependencies) http.Handler {
 		r.With(middleware.AuthMiddleware(dep.JWTManager)).Get("/me", dep.UserHandler.Me)
 		r.With(middleware.AuthMiddleware(dep.JWTManager)).Get("/feature-flags", dep.FeatureFlagHandler.EvaluateAll)
 		r.With(middleware.AuthMiddleware(dep.JWTManager)).Get("/feature-flags/{key}", dep.FeatureFlagHandler.EvaluateOne)
+		r.Route("/products", func(r chi.Router) {
+			r.Use(middleware.AuthMiddleware(dep.JWTManager))
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(dep.RBACService, dep.PermissionResolver, "products:read"))
+				r.Get("/", dep.ProductHandler.List)
+				r.Get("/{id}", dep.ProductHandler.GetByID)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(dep.RBACService, dep.PermissionResolver, "products:write"))
+				r.Post("/", dep.ProductHandler.Create)
+				r.Put("/{id}", dep.ProductHandler.Update)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(dep.RBACService, dep.PermissionResolver, "products:delete"))
+				r.Delete("/{id}", dep.ProductHandler.Delete)
+			})
+		})
 		r.With(middleware.AuthMiddleware(dep.JWTManager)).Get("/me/sessions", dep.UserHandler.Sessions)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(dep.JWTManager))

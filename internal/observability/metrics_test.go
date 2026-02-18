@@ -258,6 +258,8 @@ func newTestAppMetrics(t *testing.T, provider *sdkmetric.MeterProvider) *AppMetr
 		httpMiddlewareValidation:     counter("http.middleware.validation.events"),
 		adminListCacheEntryAge:       hist("admin.list.cache.entry_age"),
 		adminNegativeLookupCounter:   counter("admin.lookup.negative.effectiveness"),
+		productOperationCounter:      counter("product.operation.events"),
+		productOperationDuration:     hist("product.operation.duration"),
 	}
 }
 

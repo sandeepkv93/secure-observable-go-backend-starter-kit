@@ -62,6 +62,8 @@ type AppMetrics struct {
 	featureFlagEvalCounter       metric.Int64Counter
 	featureFlagEvalDuration      metric.Float64Histogram
 	featureFlagCacheCounter      metric.Int64Counter
+	productOperationCounter      metric.Int64Counter
+	productOperationDuration     metric.Float64Histogram
 }
 
 var (
@@ -333,6 +335,18 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 	if err != nil {
 		return nil, err
 	}
+	productOperationCounter, err := meter.Int64Counter("product.operation.events")
+	if err != nil {
+		return nil, err
+	}
+	productOperationDuration, err := meter.Float64Histogram(
+		"product.operation.duration",
+		metric.WithUnit("s"),
+		metric.WithDescription("Duration of product business operations in seconds"),
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	metricsMu.Lock()
 	appMetrics = &AppMetrics{
@@ -379,6 +393,8 @@ func InitMetrics(ctx context.Context, cfg *config.Config, logger *slog.Logger) (
 		featureFlagEvalCounter:       featureFlagEvalCounter,
 		featureFlagEvalDuration:      featureFlagEvalDuration,
 		featureFlagCacheCounter:      featureFlagCacheCounter,
+		productOperationCounter:      productOperationCounter,
+		productOperationDuration:     productOperationDuration,
 	}
 	metricsMu.Unlock()
 
@@ -927,6 +943,23 @@ func RecordFeatureFlagEvaluationCache(ctx context.Context, outcome string) {
 		return
 	}
 	m.featureFlagCacheCounter.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("outcome", outcome),
+	))
+}
+
+func RecordProductOperation(ctx context.Context, operation, outcome string, duration time.Duration) {
+	metricsMu.RLock()
+	m := appMetrics
+	metricsMu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.productOperationCounter.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("operation", operation),
+		attribute.String("outcome", outcome),
+	))
+	m.productOperationDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(
+		attribute.String("operation", operation),
 		attribute.String("outcome", outcome),
 	))
 }
