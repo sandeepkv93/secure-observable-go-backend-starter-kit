@@ -3,6 +3,6 @@ load("@rules_go//go:def.bzl", "go_library")
 go_library(
     name = "validator",
     srcs = ["validator.go"],
-    importpath = "github.com/sandeepkv93/everything-backend-starter-kit/pkg/validator",
+    importpath = "github.com/sandeepkv93/everything-backend-starter-kit/internal/validator",
     visibility = ["//visibility:public"],
 )
