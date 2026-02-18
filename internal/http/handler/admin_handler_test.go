@@ -13,74 +13,57 @@ import (
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/config"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/domain"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/repository"
-	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
+	repogomock "github.com/sandeepkv93/everything-backend-starter-kit/internal/repository/gomock"
+	servicegomock "github.com/sandeepkv93/everything-backend-starter-kit/internal/service/gomock"
+	"go.uber.org/mock/gomock"
 	"gorm.io/gorm"
 )
 
-type stubAdminUserService struct {
+type nopTB struct{}
+
+func (nopTB) Errorf(string, ...any) {}
+func (nopTB) Fatalf(string, ...any) {}
+func (nopTB) Helper()               {}
+
+type adminUserState struct {
 	setRolesFn func(userID uint, roleIDs []uint) error
 	getByIDFn  func(id uint) (*domain.User, []string, error)
 }
 
-func (s *stubAdminUserService) GetByID(id uint) (*domain.User, []string, error) {
+func (s *adminUserState) GetByID(id uint) (*domain.User, []string, error) {
 	if s.getByIDFn != nil {
 		return s.getByIDFn(id)
 	}
 	return &domain.User{ID: id}, nil, nil
 }
 
-func (s *stubAdminUserService) List() ([]domain.User, error) { return nil, nil }
-
-func (s *stubAdminUserService) SetRoles(userID uint, roleIDs []uint) error {
+func (s *adminUserState) SetRoles(userID uint, roleIDs []uint) error {
 	if s.setRolesFn != nil {
 		return s.setRolesFn(userID, roleIDs)
 	}
 	return nil
 }
 
-type stubRBAC struct{}
-
-func (s *stubRBAC) HasPermission(perms []string, required string) bool {
-	for _, p := range perms {
-		if p == required {
-			return true
-		}
-	}
-	return false
-}
-
-type stubPermissionResolver struct {
+type permissionResolverState struct {
 	invalidateUserCalls []uint
 	invalidateAllCount  int
 }
 
-func (s *stubPermissionResolver) ResolvePermissions(ctx context.Context, claims *security.Claims) ([]string, error) {
-	return nil, nil
-}
-
-func (s *stubPermissionResolver) InvalidateUser(ctx context.Context, userID uint) error {
+func (s *permissionResolverState) InvalidateUser(ctx context.Context, userID uint) error {
 	s.invalidateUserCalls = append(s.invalidateUserCalls, userID)
 	return nil
 }
 
-func (s *stubPermissionResolver) InvalidateAll(ctx context.Context) error {
+func (s *permissionResolverState) InvalidateAll(ctx context.Context) error {
 	s.invalidateAllCount++
 	return nil
 }
 
-type stubAdminListCache struct {
+type adminListCacheState struct {
 	invalidate map[string]int
 }
 
-func (s *stubAdminListCache) Get(ctx context.Context, namespace, key string) ([]byte, bool, error) {
-	return nil, false, nil
-}
-
-func (s *stubAdminListCache) Set(ctx context.Context, namespace, key string, value []byte, ttl time.Duration) error {
-	return nil
-}
-
-func (s *stubAdminListCache) InvalidateNamespace(ctx context.Context, namespace string) error {
+func (s *adminListCacheState) InvalidateNamespace(ctx context.Context, namespace string) error {
 	if s.invalidate == nil {
 		s.invalidate = map[string]int{}
 	}
@@ -88,23 +71,19 @@ func (s *stubAdminListCache) InvalidateNamespace(ctx context.Context, namespace 
 	return nil
 }
 
-type stubNegativeLookup struct {
+type negativeLookupState struct {
 	hits       map[string]bool
 	invalidate map[string]int
 }
 
-func (s *stubNegativeLookup) Get(ctx context.Context, namespace, key string) (bool, error) {
+func (s *negativeLookupState) Get(ctx context.Context, namespace, key string) (bool, error) {
 	if s.hits == nil {
 		return false, nil
 	}
 	return s.hits[namespace+"|"+key], nil
 }
 
-func (s *stubNegativeLookup) Set(ctx context.Context, namespace, key string, ttl time.Duration) error {
-	return nil
-}
-
-func (s *stubNegativeLookup) InvalidateNamespace(ctx context.Context, namespace string) error {
+func (s *negativeLookupState) InvalidateNamespace(ctx context.Context, namespace string) error {
 	if s.invalidate == nil {
 		s.invalidate = map[string]int{}
 	}
@@ -112,24 +91,7 @@ func (s *stubNegativeLookup) InvalidateNamespace(ctx context.Context, namespace 
 	return nil
 }
 
-type stubUserRepoForAdmin struct{}
-
-func (s *stubUserRepoForAdmin) FindByID(id uint) (*domain.User, error) {
-	return nil, gorm.ErrRecordNotFound
-}
-func (s *stubUserRepoForAdmin) FindByEmail(email string) (*domain.User, error) {
-	return nil, gorm.ErrRecordNotFound
-}
-func (s *stubUserRepoForAdmin) Create(user *domain.User) error { return nil }
-func (s *stubUserRepoForAdmin) Update(user *domain.User) error { return nil }
-func (s *stubUserRepoForAdmin) List() ([]domain.User, error)   { return nil, nil }
-func (s *stubUserRepoForAdmin) ListPaged(query repository.UserListQuery) (repository.PageResult[domain.User], error) {
-	return repository.PageResult[domain.User]{}, nil
-}
-func (s *stubUserRepoForAdmin) SetRoles(userID uint, roleIDs []uint) error { return nil }
-func (s *stubUserRepoForAdmin) AddRole(userID, roleID uint) error          { return nil }
-
-type stubRoleRepo struct {
+type adminRoleRepoState struct {
 	rolesByID   map[uint]*domain.Role
 	rolesByName map[string]*domain.Role
 	findByIDN   int
@@ -138,7 +100,7 @@ type stubRoleRepo struct {
 	deleteFn    func(id uint) error
 }
 
-func (s *stubRoleRepo) FindByID(id uint) (*domain.Role, error) {
+func (s *adminRoleRepoState) FindByID(id uint) (*domain.Role, error) {
 	s.findByIDN++
 	if role, ok := s.rolesByID[id]; ok {
 		cp := *role
@@ -147,7 +109,7 @@ func (s *stubRoleRepo) FindByID(id uint) (*domain.Role, error) {
 	return nil, repository.ErrRoleNotFound
 }
 
-func (s *stubRoleRepo) FindByName(name string) (*domain.Role, error) {
+func (s *adminRoleRepoState) FindByName(name string) (*domain.Role, error) {
 	if s.rolesByName != nil {
 		if role, ok := s.rolesByName[name]; ok {
 			cp := *role
@@ -157,13 +119,7 @@ func (s *stubRoleRepo) FindByName(name string) (*domain.Role, error) {
 	return nil, repository.ErrRoleNotFound
 }
 
-func (s *stubRoleRepo) List() ([]domain.Role, error) { return nil, nil }
-
-func (s *stubRoleRepo) ListPaged(req repository.PageRequest, sortBy, sortOrder, name string) (repository.PageResult[domain.Role], error) {
-	return repository.PageResult[domain.Role]{}, nil
-}
-
-func (s *stubRoleRepo) Create(role *domain.Role, permissionIDs []uint) error {
+func (s *adminRoleRepoState) Create(role *domain.Role, permissionIDs []uint) error {
 	if s.createFn != nil {
 		return s.createFn(role, permissionIDs)
 	}
@@ -177,7 +133,7 @@ func (s *stubRoleRepo) Create(role *domain.Role, permissionIDs []uint) error {
 	return nil
 }
 
-func (s *stubRoleRepo) Update(role *domain.Role, permissionIDs []uint) error {
+func (s *adminRoleRepoState) Update(role *domain.Role, permissionIDs []uint) error {
 	if s.updateFn != nil {
 		return s.updateFn(role, permissionIDs)
 	}
@@ -193,7 +149,7 @@ func (s *stubRoleRepo) Update(role *domain.Role, permissionIDs []uint) error {
 	return nil
 }
 
-func (s *stubRoleRepo) DeleteByID(id uint) error {
+func (s *adminRoleRepoState) DeleteByID(id uint) error {
 	if s.deleteFn != nil {
 		return s.deleteFn(id)
 	}
@@ -203,20 +159,14 @@ func (s *stubRoleRepo) DeleteByID(id uint) error {
 	return nil
 }
 
-type stubPermRepo struct {
+type adminPermRepoState struct {
 	byID      map[uint]*domain.Permission
 	findPairs func(pairs [][2]string) ([]domain.Permission, error)
 	updateFn  func(permission *domain.Permission) error
 	deleteFn  func(id uint) error
 }
 
-func (s *stubPermRepo) List() ([]domain.Permission, error) { return nil, nil }
-
-func (s *stubPermRepo) ListPaged(req repository.PageRequest, sortBy, sortOrder, resource, action string) (repository.PageResult[domain.Permission], error) {
-	return repository.PageResult[domain.Permission]{}, nil
-}
-
-func (s *stubPermRepo) FindByID(id uint) (*domain.Permission, error) {
+func (s *adminPermRepoState) FindByID(id uint) (*domain.Permission, error) {
 	if p, ok := s.byID[id]; ok {
 		cp := *p
 		return &cp, nil
@@ -224,7 +174,7 @@ func (s *stubPermRepo) FindByID(id uint) (*domain.Permission, error) {
 	return nil, repository.ErrPermissionNotFound
 }
 
-func (s *stubPermRepo) FindByPairs(pairs [][2]string) ([]domain.Permission, error) {
+func (s *adminPermRepoState) FindByPairs(pairs [][2]string) ([]domain.Permission, error) {
 	if s.findPairs != nil {
 		return s.findPairs(pairs)
 	}
@@ -237,7 +187,7 @@ func (s *stubPermRepo) FindByPairs(pairs [][2]string) ([]domain.Permission, erro
 	return out, nil
 }
 
-func (s *stubPermRepo) FindByResourceAction(resource, action string) (*domain.Permission, error) {
+func (s *adminPermRepoState) FindByResourceAction(resource, action string) (*domain.Permission, error) {
 	for _, p := range s.byID {
 		if p.Resource == resource && p.Action == action {
 			cp := *p
@@ -247,7 +197,7 @@ func (s *stubPermRepo) FindByResourceAction(resource, action string) (*domain.Pe
 	return nil, repository.ErrPermissionNotFound
 }
 
-func (s *stubPermRepo) Create(permission *domain.Permission) error {
+func (s *adminPermRepoState) Create(permission *domain.Permission) error {
 	if permission.ID == 0 {
 		permission.ID = 700
 	}
@@ -258,7 +208,7 @@ func (s *stubPermRepo) Create(permission *domain.Permission) error {
 	return nil
 }
 
-func (s *stubPermRepo) Update(permission *domain.Permission) error {
+func (s *adminPermRepoState) Update(permission *domain.Permission) error {
 	if s.updateFn != nil {
 		return s.updateFn(permission)
 	}
@@ -269,7 +219,7 @@ func (s *stubPermRepo) Update(permission *domain.Permission) error {
 	return nil
 }
 
-func (s *stubPermRepo) DeleteByID(id uint) error {
+func (s *adminPermRepoState) DeleteByID(id uint) error {
 	if s.deleteFn != nil {
 		return s.deleteFn(id)
 	}
@@ -277,13 +227,14 @@ func (s *stubPermRepo) DeleteByID(id uint) error {
 	return nil
 }
 
-func newAdminHandlerFixture() (*AdminHandler, *stubPermissionResolver, *stubAdminListCache, *stubNegativeLookup, *stubRoleRepo, *stubPermRepo, *stubAdminUserService) {
-	resolver := &stubPermissionResolver{}
-	adminCache := &stubAdminListCache{invalidate: map[string]int{}}
-	neg := &stubNegativeLookup{hits: map[string]bool{}, invalidate: map[string]int{}}
-	roleRepo := &stubRoleRepo{rolesByID: map[uint]*domain.Role{}, rolesByName: map[string]*domain.Role{}}
-	permRepo := &stubPermRepo{byID: map[uint]*domain.Permission{}}
-	userSvc := &stubAdminUserService{}
+func newAdminHandlerFixture() (*AdminHandler, *permissionResolverState, *adminListCacheState, *negativeLookupState, *adminRoleRepoState, *adminPermRepoState, *adminUserState) {
+	ctrl := gomock.NewController(nopTB{})
+	resolver := &permissionResolverState{}
+	adminCache := &adminListCacheState{invalidate: map[string]int{}}
+	neg := &negativeLookupState{hits: map[string]bool{}, invalidate: map[string]int{}}
+	roleRepo := &adminRoleRepoState{rolesByID: map[uint]*domain.Role{}, rolesByName: map[string]*domain.Role{}}
+	permRepo := &adminPermRepoState{byID: map[uint]*domain.Permission{}}
+	userSvc := &adminUserState{}
 	userSvc.getByIDFn = func(id uint) (*domain.User, []string, error) {
 		return &domain.User{
 			ID: id,
@@ -301,15 +252,72 @@ func newAdminHandlerFixture() (*AdminHandler, *stubPermissionResolver, *stubAdmi
 		RBACProtectedPermissions: []string{"users:read", "users:write", "roles:read", "roles:write", "permissions:read", "permissions:write"},
 	}
 
+	userSvcMock := servicegomock.NewMockUserServiceInterface(ctrl)
+	userRepoMock := repogomock.NewMockUserRepository(ctrl)
+	roleRepoMock := repogomock.NewMockRoleRepository(ctrl)
+	permRepoMock := repogomock.NewMockPermissionRepository(ctrl)
+	rbacMock := servicegomock.NewMockRBACAuthorizer(ctrl)
+	resolverMock := servicegomock.NewMockPermissionResolver(ctrl)
+	adminCacheMock := servicegomock.NewMockAdminListCacheStore(ctrl)
+	negMock := servicegomock.NewMockNegativeLookupCacheStore(ctrl)
+
+	userSvcMock.EXPECT().GetByID(gomock.Any()).AnyTimes().DoAndReturn(userSvc.GetByID)
+	userSvcMock.EXPECT().List().AnyTimes().Return([]domain.User{}, nil)
+	userSvcMock.EXPECT().SetRoles(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(userSvc.SetRoles)
+
+	userRepoMock.EXPECT().FindByID(gomock.Any()).AnyTimes().Return(nil, gorm.ErrRecordNotFound)
+	userRepoMock.EXPECT().FindByEmail(gomock.Any()).AnyTimes().Return(nil, gorm.ErrRecordNotFound)
+	userRepoMock.EXPECT().Create(gomock.Any()).AnyTimes().Return(nil)
+	userRepoMock.EXPECT().Update(gomock.Any()).AnyTimes().Return(nil)
+	userRepoMock.EXPECT().List().AnyTimes().Return([]domain.User{}, nil)
+	userRepoMock.EXPECT().ListPaged(gomock.Any()).AnyTimes().Return(repository.PageResult[domain.User]{}, nil)
+	userRepoMock.EXPECT().SetRoles(gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	userRepoMock.EXPECT().AddRole(gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+
+	roleRepoMock.EXPECT().FindByID(gomock.Any()).AnyTimes().DoAndReturn(roleRepo.FindByID)
+	roleRepoMock.EXPECT().FindByName(gomock.Any()).AnyTimes().DoAndReturn(roleRepo.FindByName)
+	roleRepoMock.EXPECT().List().AnyTimes().Return([]domain.Role{}, nil)
+	roleRepoMock.EXPECT().ListPaged(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(repository.PageResult[domain.Role]{}, nil)
+	roleRepoMock.EXPECT().Create(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(roleRepo.Create)
+	roleRepoMock.EXPECT().Update(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(roleRepo.Update)
+	roleRepoMock.EXPECT().DeleteByID(gomock.Any()).AnyTimes().DoAndReturn(roleRepo.DeleteByID)
+
+	permRepoMock.EXPECT().List().AnyTimes().Return([]domain.Permission{}, nil)
+	permRepoMock.EXPECT().ListPaged(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(repository.PageResult[domain.Permission]{}, nil)
+	permRepoMock.EXPECT().FindByID(gomock.Any()).AnyTimes().DoAndReturn(permRepo.FindByID)
+	permRepoMock.EXPECT().FindByPairs(gomock.Any()).AnyTimes().DoAndReturn(permRepo.FindByPairs)
+	permRepoMock.EXPECT().FindByResourceAction(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(permRepo.FindByResourceAction)
+	permRepoMock.EXPECT().Create(gomock.Any()).AnyTimes().DoAndReturn(permRepo.Create)
+	permRepoMock.EXPECT().Update(gomock.Any()).AnyTimes().DoAndReturn(permRepo.Update)
+	permRepoMock.EXPECT().DeleteByID(gomock.Any()).AnyTimes().DoAndReturn(permRepo.DeleteByID)
+
+	rbacMock.EXPECT().HasPermission(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(perms []string, required string) bool {
+		for _, p := range perms {
+			if p == required {
+				return true
+			}
+		}
+		return false
+	})
+	resolverMock.EXPECT().ResolvePermissions(gomock.Any(), gomock.Any()).AnyTimes().Return([]string{}, nil)
+	resolverMock.EXPECT().InvalidateUser(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(resolver.InvalidateUser)
+	resolverMock.EXPECT().InvalidateAll(gomock.Any()).AnyTimes().DoAndReturn(resolver.InvalidateAll)
+	adminCacheMock.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil, false, nil)
+	adminCacheMock.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	adminCacheMock.EXPECT().InvalidateNamespace(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(adminCache.InvalidateNamespace)
+	negMock.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(neg.Get)
+	negMock.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	negMock.EXPECT().InvalidateNamespace(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(neg.InvalidateNamespace)
+
 	h := NewAdminHandler(
-		userSvc,
-		&stubUserRepoForAdmin{},
-		roleRepo,
-		permRepo,
-		&stubRBAC{},
-		resolver,
-		adminCache,
-		neg,
+		userSvcMock,
+		userRepoMock,
+		roleRepoMock,
+		permRepoMock,
+		rbacMock,
+		resolverMock,
+		adminCacheMock,
+		negMock,
 		nil,
 		cfg,
 	)

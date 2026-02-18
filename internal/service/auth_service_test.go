@@ -12,6 +12,7 @@ import (
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/config"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/domain"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/repository"
+	repogomock "github.com/sandeepkv93/everything-backend-starter-kit/internal/repository/gomock"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/oauth2"
@@ -581,13 +582,13 @@ func FuzzAuthServiceTokenHandlingRejectsInvalid(f *testing.F) {
 type authServiceFixture struct {
 	cfg              *config.Config
 	auth             *AuthService
-	userRepo         *fakeUserRepo
-	roleRepo         *fakeRoleRepo
-	localRepo        *fakeLocalCredentialRepo
-	verifyRepo       *fakeVerificationTokenRepo
-	oauthRepo        *fakeOAuthRepo
-	emailNotifier    *fakeEmailVerificationNotifier
-	passwordNotifier *fakePasswordResetNotifier
+	userRepo         *userRepoState
+	roleRepo         *roleRepoState
+	localRepo        *localCredentialState
+	verifyRepo       *verificationTokenState
+	oauthRepo        *oauthRepoState
+	emailNotifier    *emailNotifierState
+	passwordNotifier *passwordNotifierState
 }
 
 func newAuthServiceFixture() *authServiceFixture {
@@ -604,22 +605,64 @@ func newAuthServiceFixtureWithSessionRepo(sessionRepo repository.SessionReposito
 		JWTAccessTTL:                      15 * time.Minute,
 	}
 
-	userRepo := newFakeUserRepo()
-	roleRepo := newFakeRoleRepo()
+	userRepo := newUserRepoState()
+	roleRepo := newRoleRepoState()
 	roleRepo.byName["user"] = &domain.Role{ID: 1, Name: "user"}
-	localRepo := newFakeLocalCredentialRepo(userRepo)
-	verifyRepo := newFakeVerificationTokenRepo()
-	oauthRepo := newFakeOAuthRepo()
-	emailNotifier := &fakeEmailVerificationNotifier{}
-	passwordNotifier := &fakePasswordResetNotifier{}
+	localRepo := newLocalCredentialState(userRepo)
+	verifyRepo := newVerificationTokenState()
+	oauthRepo := newOAuthRepoState()
+	emailNotifier := &emailNotifierState{}
+	passwordNotifier := &passwordNotifierState{}
 	ctrl := gomock.NewController(tNop{})
 	oauthProvider := NewMockOAuthProvider(ctrl)
 	oauthProvider.EXPECT().Exchange(gomock.Any(), gomock.Any()).AnyTimes().Return(&oauth2.Token{AccessToken: "token"}, nil)
 	oauthProvider.EXPECT().FetchUserInfo(gomock.Any(), gomock.Any()).AnyTimes().Return(&OAuthUserInfo{ProviderUserID: "provider-id", Email: "user@example.com", EmailVerified: true}, nil)
-	oauthSvc := NewOAuthService(oauthProvider, userRepo, oauthRepo, roleRepo)
+	userRepoMock := repogomock.NewMockUserRepository(ctrl)
+	roleRepoMock := repogomock.NewMockRoleRepository(ctrl)
+	localRepoMock := repogomock.NewMockLocalCredentialRepository(ctrl)
+	verifyRepoMock := repogomock.NewMockVerificationTokenRepository(ctrl)
+	oauthRepoMock := repogomock.NewMockOAuthRepository(ctrl)
+	emailNotifierMock := NewMockEmailVerificationNotifier(ctrl)
+	passwordNotifierMock := NewMockPasswordResetNotifier(ctrl)
+
+	userRepoMock.EXPECT().FindByID(gomock.Any()).AnyTimes().DoAndReturn(userRepo.FindByID)
+	userRepoMock.EXPECT().FindByEmail(gomock.Any()).AnyTimes().DoAndReturn(userRepo.FindByEmail)
+	userRepoMock.EXPECT().Create(gomock.Any()).AnyTimes().DoAndReturn(userRepo.Create)
+	userRepoMock.EXPECT().Update(gomock.Any()).AnyTimes().DoAndReturn(userRepo.Update)
+	userRepoMock.EXPECT().List().AnyTimes().DoAndReturn(userRepo.List)
+	userRepoMock.EXPECT().ListPaged(gomock.Any()).AnyTimes().DoAndReturn(userRepo.ListPaged)
+	userRepoMock.EXPECT().SetRoles(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(userRepo.SetRoles)
+	userRepoMock.EXPECT().AddRole(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(userRepo.AddRole)
+
+	roleRepoMock.EXPECT().FindByID(gomock.Any()).AnyTimes().DoAndReturn(roleRepo.FindByID)
+	roleRepoMock.EXPECT().FindByName(gomock.Any()).AnyTimes().DoAndReturn(roleRepo.FindByName)
+	roleRepoMock.EXPECT().List().AnyTimes().Return([]domain.Role{}, nil)
+	roleRepoMock.EXPECT().ListPaged(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(repository.PageResult[domain.Role]{}, nil)
+	roleRepoMock.EXPECT().Create(gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	roleRepoMock.EXPECT().Update(gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	roleRepoMock.EXPECT().DeleteByID(gomock.Any()).AnyTimes().Return(nil)
+
+	localRepoMock.EXPECT().Create(gomock.Any()).AnyTimes().DoAndReturn(localRepo.Create)
+	localRepoMock.EXPECT().FindByUserID(gomock.Any()).AnyTimes().DoAndReturn(localRepo.FindByUserID)
+	localRepoMock.EXPECT().FindByEmail(gomock.Any()).AnyTimes().DoAndReturn(localRepo.FindByEmail)
+	localRepoMock.EXPECT().UpdatePassword(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(localRepo.UpdatePassword)
+	localRepoMock.EXPECT().MarkEmailVerified(gomock.Any()).AnyTimes().DoAndReturn(localRepo.MarkEmailVerified)
+
+	verifyRepoMock.EXPECT().Create(gomock.Any()).AnyTimes().DoAndReturn(verifyRepo.Create)
+	verifyRepoMock.EXPECT().InvalidateActiveByUserPurpose(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(verifyRepo.InvalidateActiveByUserPurpose)
+	verifyRepoMock.EXPECT().FindActiveByHashPurpose(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(verifyRepo.FindActiveByHashPurpose)
+	verifyRepoMock.EXPECT().Consume(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(verifyRepo.Consume)
+
+	oauthRepoMock.EXPECT().FindByProvider(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(oauthRepo.FindByProvider)
+	oauthRepoMock.EXPECT().Create(gomock.Any()).AnyTimes().DoAndReturn(oauthRepo.Create)
+
+	emailNotifierMock.EXPECT().SendEmailVerification(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(emailNotifier.SendEmailVerification)
+	passwordNotifierMock.EXPECT().SendPasswordReset(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(passwordNotifier.SendPasswordReset)
+
+	oauthSvc := NewOAuthService(oauthProvider, userRepoMock, oauthRepoMock, roleRepoMock)
 	tokenSvc := newTestTokenService(sessionRepo)
-	userSvc := NewUserService(userRepo, NewRBACService())
-	authSvc := NewAuthService(cfg, oauthSvc, tokenSvc, userSvc, roleRepo, localRepo, verifyRepo, emailNotifier, passwordNotifier)
+	userSvc := NewUserService(userRepoMock, NewRBACService())
+	authSvc := NewAuthService(cfg, oauthSvc, tokenSvc, userSvc, roleRepoMock, localRepoMock, verifyRepoMock, emailNotifierMock, passwordNotifierMock)
 
 	return &authServiceFixture{
 		cfg:              cfg,
@@ -665,7 +708,7 @@ func (fx *authServiceFixture) seedLocalUser(email, name, password string, verifi
 	return uid
 }
 
-type fakeUserRepo struct {
+type userRepoState struct {
 	nextID uint
 	byID   map[uint]*domain.User
 	byMail map[string]uint
@@ -678,8 +721,8 @@ type fakeUserRepo struct {
 	addRoleErr     error
 }
 
-func newFakeUserRepo() *fakeUserRepo {
-	return &fakeUserRepo{
+func newUserRepoState() *userRepoState {
+	return &userRepoState{
 		nextID:         1,
 		byID:           map[uint]*domain.User{},
 		byMail:         map[string]uint{},
@@ -687,7 +730,7 @@ func newFakeUserRepo() *fakeUserRepo {
 	}
 }
 
-func (r *fakeUserRepo) FindByID(id uint) (*domain.User, error) {
+func (r *userRepoState) FindByID(id uint) (*domain.User, error) {
 	if r.findByIDErr != nil {
 		return nil, r.findByIDErr
 	}
@@ -700,7 +743,7 @@ func (r *fakeUserRepo) FindByID(id uint) (*domain.User, error) {
 	return &copy, nil
 }
 
-func (r *fakeUserRepo) FindByEmail(email string) (*domain.User, error) {
+func (r *userRepoState) FindByEmail(email string) (*domain.User, error) {
 	normalized := strings.ToLower(strings.TrimSpace(email))
 	if err, ok := r.findByEmailErr[normalized]; ok {
 		return nil, err
@@ -712,7 +755,7 @@ func (r *fakeUserRepo) FindByEmail(email string) (*domain.User, error) {
 	return r.FindByID(id)
 }
 
-func (r *fakeUserRepo) Create(user *domain.User) error {
+func (r *userRepoState) Create(user *domain.User) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
@@ -728,7 +771,7 @@ func (r *fakeUserRepo) Create(user *domain.User) error {
 	return nil
 }
 
-func (r *fakeUserRepo) Update(user *domain.User) error {
+func (r *userRepoState) Update(user *domain.User) error {
 	if r.updateErr != nil {
 		return r.updateErr
 	}
@@ -742,7 +785,7 @@ func (r *fakeUserRepo) Update(user *domain.User) error {
 	return nil
 }
 
-func (r *fakeUserRepo) List() ([]domain.User, error) {
+func (r *userRepoState) List() ([]domain.User, error) {
 	out := make([]domain.User, 0, len(r.byID))
 	for _, u := range r.byID {
 		copy := *u
@@ -752,7 +795,7 @@ func (r *fakeUserRepo) List() ([]domain.User, error) {
 	return out, nil
 }
 
-func (r *fakeUserRepo) ListPaged(query repository.UserListQuery) (repository.PageResult[domain.User], error) {
+func (r *userRepoState) ListPaged(query repository.UserListQuery) (repository.PageResult[domain.User], error) {
 	users, err := r.List()
 	if err != nil {
 		return repository.PageResult[domain.User]{}, err
@@ -777,7 +820,7 @@ func (r *fakeUserRepo) ListPaged(query repository.UserListQuery) (repository.Pag
 	}, nil
 }
 
-func (r *fakeUserRepo) SetRoles(userID uint, roleIDs []uint) error {
+func (r *userRepoState) SetRoles(userID uint, roleIDs []uint) error {
 	if r.setRolesErr != nil {
 		return r.setRolesErr
 	}
@@ -793,7 +836,7 @@ func (r *fakeUserRepo) SetRoles(userID uint, roleIDs []uint) error {
 	return nil
 }
 
-func (r *fakeUserRepo) AddRole(userID, roleID uint) error {
+func (r *userRepoState) AddRole(userID, roleID uint) error {
 	if r.addRoleErr != nil {
 		return r.addRoleErr
 	}
@@ -810,7 +853,7 @@ func (r *fakeUserRepo) AddRole(userID, roleID uint) error {
 	return nil
 }
 
-func (r *fakeUserRepo) hasRoleByName(email, name string) bool {
+func (r *userRepoState) hasRoleByName(email, name string) bool {
 	u, err := r.FindByEmail(email)
 	if err != nil {
 		return false
@@ -834,21 +877,21 @@ func roleNameFromID(id uint) string {
 	}
 }
 
-type fakeRoleRepo struct {
+type roleRepoState struct {
 	byName        map[string]*domain.Role
 	byID          map[uint]*domain.Role
 	findByNameErr map[string]error
 }
 
-func newFakeRoleRepo() *fakeRoleRepo {
-	return &fakeRoleRepo{
+func newRoleRepoState() *roleRepoState {
+	return &roleRepoState{
 		byName:        map[string]*domain.Role{},
 		byID:          map[uint]*domain.Role{},
 		findByNameErr: map[string]error{},
 	}
 }
 
-func (r *fakeRoleRepo) FindByID(id uint) (*domain.Role, error) {
+func (r *roleRepoState) FindByID(id uint) (*domain.Role, error) {
 	role, ok := r.byID[id]
 	if !ok {
 		return nil, repository.ErrRoleNotFound
@@ -857,7 +900,7 @@ func (r *fakeRoleRepo) FindByID(id uint) (*domain.Role, error) {
 	return &copy, nil
 }
 
-func (r *fakeRoleRepo) FindByName(name string) (*domain.Role, error) {
+func (r *roleRepoState) FindByName(name string) (*domain.Role, error) {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	if err, ok := r.findByNameErr[normalized]; ok {
 		return nil, err
@@ -870,20 +913,8 @@ func (r *fakeRoleRepo) FindByName(name string) (*domain.Role, error) {
 	return &copy, nil
 }
 
-func (r *fakeRoleRepo) List() ([]domain.Role, error) { return nil, nil }
-
-func (r *fakeRoleRepo) ListPaged(req repository.PageRequest, sortBy, sortOrder, name string) (repository.PageResult[domain.Role], error) {
-	return repository.PageResult[domain.Role]{}, nil
-}
-
-func (r *fakeRoleRepo) Create(role *domain.Role, permissionIDs []uint) error { return nil }
-
-func (r *fakeRoleRepo) Update(role *domain.Role, permissionIDs []uint) error { return nil }
-
-func (r *fakeRoleRepo) DeleteByID(id uint) error { return nil }
-
-type fakeLocalCredentialRepo struct {
-	userRepo *fakeUserRepo
+type localCredentialState struct {
+	userRepo *userRepoState
 	byUserID map[uint]*domain.LocalCredential
 
 	createErr            error
@@ -893,11 +924,11 @@ type fakeLocalCredentialRepo struct {
 	findByEmailErr       error
 }
 
-func newFakeLocalCredentialRepo(userRepo *fakeUserRepo) *fakeLocalCredentialRepo {
-	return &fakeLocalCredentialRepo{userRepo: userRepo, byUserID: map[uint]*domain.LocalCredential{}}
+func newLocalCredentialState(userRepo *userRepoState) *localCredentialState {
+	return &localCredentialState{userRepo: userRepo, byUserID: map[uint]*domain.LocalCredential{}}
 }
 
-func (r *fakeLocalCredentialRepo) Create(credential *domain.LocalCredential) error {
+func (r *localCredentialState) Create(credential *domain.LocalCredential) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
@@ -906,7 +937,7 @@ func (r *fakeLocalCredentialRepo) Create(credential *domain.LocalCredential) err
 	return nil
 }
 
-func (r *fakeLocalCredentialRepo) FindByUserID(userID uint) (*domain.LocalCredential, error) {
+func (r *localCredentialState) FindByUserID(userID uint) (*domain.LocalCredential, error) {
 	if r.findByUserIDErr != nil {
 		return nil, r.findByUserIDErr
 	}
@@ -918,7 +949,7 @@ func (r *fakeLocalCredentialRepo) FindByUserID(userID uint) (*domain.LocalCreden
 	return &copy, nil
 }
 
-func (r *fakeLocalCredentialRepo) FindByEmail(email string) (*domain.LocalCredential, error) {
+func (r *localCredentialState) FindByEmail(email string) (*domain.LocalCredential, error) {
 	if r.findByEmailErr != nil {
 		return nil, r.findByEmailErr
 	}
@@ -934,7 +965,7 @@ func (r *fakeLocalCredentialRepo) FindByEmail(email string) (*domain.LocalCreden
 	return &copy, nil
 }
 
-func (r *fakeLocalCredentialRepo) UpdatePassword(userID uint, newHash string) error {
+func (r *localCredentialState) UpdatePassword(userID uint, newHash string) error {
 	if r.updatePasswordErr != nil {
 		return r.updatePasswordErr
 	}
@@ -946,7 +977,7 @@ func (r *fakeLocalCredentialRepo) UpdatePassword(userID uint, newHash string) er
 	return nil
 }
 
-func (r *fakeLocalCredentialRepo) MarkEmailVerified(userID uint) error {
+func (r *localCredentialState) MarkEmailVerified(userID uint) error {
 	if r.markEmailVerifiedErr != nil {
 		return r.markEmailVerifiedErr
 	}
@@ -960,7 +991,7 @@ func (r *fakeLocalCredentialRepo) MarkEmailVerified(userID uint) error {
 	return nil
 }
 
-type fakeVerificationTokenRepo struct {
+type verificationTokenState struct {
 	nextID uint
 	tokens map[uint]*domain.VerificationToken
 
@@ -974,11 +1005,11 @@ type fakeVerificationTokenRepo struct {
 	consumeErr    error
 }
 
-func newFakeVerificationTokenRepo() *fakeVerificationTokenRepo {
-	return &fakeVerificationTokenRepo{nextID: 1, tokens: map[uint]*domain.VerificationToken{}}
+func newVerificationTokenState() *verificationTokenState {
+	return &verificationTokenState{nextID: 1, tokens: map[uint]*domain.VerificationToken{}}
 }
 
-func (r *fakeVerificationTokenRepo) seedToken(userID uint, purpose, hash string, expiresAt time.Time, used bool) {
+func (r *verificationTokenState) seedToken(userID uint, purpose, hash string, expiresAt time.Time, used bool) {
 	token := &domain.VerificationToken{
 		ID:        r.nextID,
 		UserID:    userID,
@@ -994,7 +1025,7 @@ func (r *fakeVerificationTokenRepo) seedToken(userID uint, purpose, hash string,
 	r.tokens[token.ID] = token
 }
 
-func (r *fakeVerificationTokenRepo) Create(token *domain.VerificationToken) error {
+func (r *verificationTokenState) Create(token *domain.VerificationToken) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
@@ -1007,7 +1038,7 @@ func (r *fakeVerificationTokenRepo) Create(token *domain.VerificationToken) erro
 	return nil
 }
 
-func (r *fakeVerificationTokenRepo) InvalidateActiveByUserPurpose(userID uint, purpose string, now time.Time) error {
+func (r *verificationTokenState) InvalidateActiveByUserPurpose(userID uint, purpose string, now time.Time) error {
 	if r.invalidateErr != nil {
 		return r.invalidateErr
 	}
@@ -1021,7 +1052,7 @@ func (r *fakeVerificationTokenRepo) InvalidateActiveByUserPurpose(userID uint, p
 	return nil
 }
 
-func (r *fakeVerificationTokenRepo) FindActiveByHashPurpose(hash, purpose string, now time.Time) (*domain.VerificationToken, error) {
+func (r *verificationTokenState) FindActiveByHashPurpose(hash, purpose string, now time.Time) (*domain.VerificationToken, error) {
 	if r.findErr != nil {
 		return nil, r.findErr
 	}
@@ -1034,7 +1065,7 @@ func (r *fakeVerificationTokenRepo) FindActiveByHashPurpose(hash, purpose string
 	return nil, repository.ErrVerificationTokenNotFound
 }
 
-func (r *fakeVerificationTokenRepo) Consume(tokenID, userID uint, now time.Time) error {
+func (r *verificationTokenState) Consume(tokenID, userID uint, now time.Time) error {
 	if r.consumeErr != nil {
 		return r.consumeErr
 	}
@@ -1048,37 +1079,37 @@ func (r *fakeVerificationTokenRepo) Consume(tokenID, userID uint, now time.Time)
 	return nil
 }
 
-type fakeEmailVerificationNotifier struct {
+type emailNotifierState struct {
 	calls []VerificationNotification
 	err   error
 }
 
-func (n *fakeEmailVerificationNotifier) SendEmailVerification(ctx context.Context, notification VerificationNotification) error {
+func (n *emailNotifierState) SendEmailVerification(ctx context.Context, notification VerificationNotification) error {
 	n.calls = append(n.calls, notification)
 	return n.err
 }
 
-type fakePasswordResetNotifier struct {
+type passwordNotifierState struct {
 	calls []PasswordResetNotification
 	err   error
 }
 
-func (n *fakePasswordResetNotifier) SendPasswordReset(ctx context.Context, notification PasswordResetNotification) error {
+func (n *passwordNotifierState) SendPasswordReset(ctx context.Context, notification PasswordResetNotification) error {
 	n.calls = append(n.calls, notification)
 	return n.err
 }
 
-type fakeOAuthRepo struct {
+type oauthRepoState struct {
 	byProviderUser map[string]*domain.OAuthAccount
 	createErr      error
 	findErr        error
 }
 
-func newFakeOAuthRepo() *fakeOAuthRepo {
-	return &fakeOAuthRepo{byProviderUser: map[string]*domain.OAuthAccount{}}
+func newOAuthRepoState() *oauthRepoState {
+	return &oauthRepoState{byProviderUser: map[string]*domain.OAuthAccount{}}
 }
 
-func (r *fakeOAuthRepo) FindByProvider(provider, providerUserID string) (*domain.OAuthAccount, error) {
+func (r *oauthRepoState) FindByProvider(provider, providerUserID string) (*domain.OAuthAccount, error) {
 	if r.findErr != nil {
 		return nil, r.findErr
 	}
@@ -1090,7 +1121,7 @@ func (r *fakeOAuthRepo) FindByProvider(provider, providerUserID string) (*domain
 	return &copy, nil
 }
 
-func (r *fakeOAuthRepo) Create(account *domain.OAuthAccount) error {
+func (r *oauthRepoState) Create(account *domain.OAuthAccount) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
