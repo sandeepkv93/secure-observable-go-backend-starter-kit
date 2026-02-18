@@ -15,52 +15,9 @@ import (
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/http/middleware"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/service"
+	servicegomock "github.com/sandeepkv93/everything-backend-starter-kit/internal/service/gomock"
+	"go.uber.org/mock/gomock"
 )
-
-type stubFeatureFlagService struct {
-	evaluateAllFn func(ctx context.Context, evalCtx service.FeatureFlagEvaluationContext) ([]service.FeatureFlagEvaluationResult, error)
-	evaluateByKey func(ctx context.Context, key string, evalCtx service.FeatureFlagEvaluationContext) (*service.FeatureFlagEvaluationResult, error)
-	createFlagFn  func(ctx context.Context, flag *domain.FeatureFlag) error
-}
-
-func (s *stubFeatureFlagService) EvaluateAll(ctx context.Context, evalCtx service.FeatureFlagEvaluationContext) ([]service.FeatureFlagEvaluationResult, error) {
-	if s.evaluateAllFn != nil {
-		return s.evaluateAllFn(ctx, evalCtx)
-	}
-	return nil, nil
-}
-
-func (s *stubFeatureFlagService) EvaluateByKey(ctx context.Context, key string, evalCtx service.FeatureFlagEvaluationContext) (*service.FeatureFlagEvaluationResult, error) {
-	if s.evaluateByKey != nil {
-		return s.evaluateByKey(ctx, key, evalCtx)
-	}
-	return &service.FeatureFlagEvaluationResult{Key: key}, nil
-}
-
-func (s *stubFeatureFlagService) ListFlags(context.Context) ([]domain.FeatureFlag, error) {
-	return nil, nil
-}
-func (s *stubFeatureFlagService) GetFlagByID(context.Context, uint) (*domain.FeatureFlag, error) {
-	return &domain.FeatureFlag{}, nil
-}
-func (s *stubFeatureFlagService) CreateFlag(ctx context.Context, flag *domain.FeatureFlag) error {
-	if s.createFlagFn != nil {
-		return s.createFlagFn(ctx, flag)
-	}
-	return nil
-}
-func (s *stubFeatureFlagService) UpdateFlag(context.Context, *domain.FeatureFlag) error { return nil }
-func (s *stubFeatureFlagService) DeleteFlag(context.Context, uint) error                { return nil }
-func (s *stubFeatureFlagService) ListRules(context.Context, uint) ([]domain.FeatureFlagRule, error) {
-	return nil, nil
-}
-func (s *stubFeatureFlagService) CreateRule(context.Context, *domain.FeatureFlagRule) error {
-	return nil
-}
-func (s *stubFeatureFlagService) UpdateRule(context.Context, *domain.FeatureFlagRule) error {
-	return nil
-}
-func (s *stubFeatureFlagService) DeleteRule(context.Context, uint, uint) error { return nil }
 
 func accessTokenForTest(t *testing.T, perms []string) string {
 	t.Helper()
@@ -73,7 +30,8 @@ func accessTokenForTest(t *testing.T, perms []string) string {
 }
 
 func TestFeatureFlagHandlerEvaluateAndAdminRBAC(t *testing.T) {
-	svc := &stubFeatureFlagService{}
+	ctrl := gomock.NewController(t)
+	svc := servicegomock.NewMockFeatureFlagService(ctrl)
 	h := NewFeatureFlagHandler(svc)
 	jwt := security.NewJWTManager("iss", "aud", "abcdefghijklmnopqrstuvwxyz123456", "abcdefghijklmnopqrstuvwxyz654321")
 	rbac := service.NewRBACService()
@@ -84,12 +42,12 @@ func TestFeatureFlagHandlerEvaluateAndAdminRBAC(t *testing.T) {
 	r.With(middleware.RequirePermission(rbac, nil, "feature_flags:write")).Post("/api/v1/admin/feature-flags", h.CreateFlag)
 
 	t.Run("user evaluation succeeds with auth", func(t *testing.T) {
-		svc.evaluateAllFn = func(ctx context.Context, evalCtx service.FeatureFlagEvaluationContext) ([]service.FeatureFlagEvaluationResult, error) {
+		svc.EXPECT().EvaluateAll(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, evalCtx service.FeatureFlagEvaluationContext) ([]service.FeatureFlagEvaluationResult, error) {
 			if evalCtx.UserID != 42 {
 				t.Fatalf("expected user id 42, got %d", evalCtx.UserID)
 			}
 			return []service.FeatureFlagEvaluationResult{{Key: "new_checkout", Enabled: true, Source: "default"}}, nil
-		}
+		})
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/feature-flags?environment=dev", nil)
 		req.Header.Set("Authorization", "Bearer "+accessTokenForTest(t, []string{"users:read"}))
@@ -113,11 +71,11 @@ func TestFeatureFlagHandlerEvaluateAndAdminRBAC(t *testing.T) {
 
 	t.Run("admin create allowed with permission", func(t *testing.T) {
 		called := false
-		svc.createFlagFn = func(ctx context.Context, flag *domain.FeatureFlag) error {
+		svc.EXPECT().CreateFlag(gomock.Any(), gomock.AssignableToTypeOf(&domain.FeatureFlag{})).DoAndReturn(func(ctx context.Context, flag *domain.FeatureFlag) error {
 			called = true
 			flag.ID = 99
 			return nil
-		}
+		})
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/feature-flags", strings.NewReader(`{"key":"new_checkout","enabled":true}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -138,7 +96,9 @@ func TestFeatureFlagHandlerEvaluateAndAdminRBAC(t *testing.T) {
 }
 
 func TestFeatureFlagHandlerGetFlagRejectsMalformedID(t *testing.T) {
-	svc := &stubFeatureFlagService{}
+	ctrl := gomock.NewController(t)
+	svc := servicegomock.NewMockFeatureFlagService(ctrl)
+	svc.EXPECT().GetFlagByID(gomock.Any(), gomock.Any()).Times(0)
 	h := NewFeatureFlagHandler(svc)
 
 	req := withURLParam(httptest.NewRequest(http.MethodGet, "/api/v1/admin/feature-flags/12abc", nil), "id", "12abc")

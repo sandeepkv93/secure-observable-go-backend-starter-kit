@@ -10,40 +10,16 @@ import (
 	"time"
 
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
+	"go.uber.org/mock/gomock"
 )
 
-type mockLimiter struct {
-	allow bool
-	retry time.Duration
-	err   error
-}
-
-func (m mockLimiter) Allow(context.Context, string, RateLimitPolicy) (Decision, error) {
-	return Decision{
-		Allowed:    m.allow,
-		RetryAfter: m.retry,
-		Remaining:  0,
-		ResetAt:    time.Now().Add(m.retry),
-	}, m.err
-}
-
-type recordingLimiter struct {
-	lastKey string
-	allow   bool
-}
-
-func (r *recordingLimiter) Allow(_ context.Context, key string, policy RateLimitPolicy) (Decision, error) {
-	r.lastKey = key
-	return Decision{
-		Allowed:   r.allow,
-		Remaining: max(policy.SustainedLimit-1, 0),
-		ResetAt:   time.Now().Add(policy.SustainedWindow),
-	}, nil
-}
-
 func TestDistributedRateLimiterFailOpenOnBackendError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	limiter := NewMockLimiter(ctrl)
+	limiter.EXPECT().Allow(gomock.Any(), gomock.Any(), gomock.Any()).Return(Decision{}, errors.New("redis down"))
+
 	rl := NewDistributedRateLimiter(
-		mockLimiter{err: errors.New("redis down")},
+		limiter,
 		10,
 		time.Minute,
 		FailOpen,
@@ -62,8 +38,12 @@ func TestDistributedRateLimiterFailOpenOnBackendError(t *testing.T) {
 }
 
 func TestDistributedRateLimiterFailClosedOnBackendError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	limiter := NewMockLimiter(ctrl)
+	limiter.EXPECT().Allow(gomock.Any(), gomock.Any(), gomock.Any()).Return(Decision{}, errors.New("redis down"))
+
 	rl := NewDistributedRateLimiter(
-		mockLimiter{err: errors.New("redis down")},
+		limiter,
 		10,
 		time.Minute,
 		FailClosed,
@@ -82,8 +62,17 @@ func TestDistributedRateLimiterFailClosedOnBackendError(t *testing.T) {
 }
 
 func TestDistributedRateLimiterDeniedSetsRetryAfter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	limiter := NewMockLimiter(ctrl)
+	limiter.EXPECT().Allow(gomock.Any(), gomock.Any(), gomock.Any()).Return(Decision{
+		Allowed:    false,
+		RetryAfter: 5 * time.Second,
+		Remaining:  0,
+		ResetAt:    time.Now().Add(5 * time.Second),
+	}, nil)
+
 	rl := NewDistributedRateLimiter(
-		mockLimiter{allow: false, retry: 5 * time.Second},
+		limiter,
 		1,
 		time.Minute,
 		FailClosed,
@@ -116,8 +105,17 @@ func TestDistributedRateLimiterDeniedSetsRetryAfter(t *testing.T) {
 }
 
 func TestDistributedRateLimiterAllowedSetsRateLimitHeaders(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	limiter := NewMockLimiter(ctrl)
+	limiter.EXPECT().Allow(gomock.Any(), gomock.Any(), gomock.Any()).Return(Decision{
+		Allowed:    true,
+		RetryAfter: time.Minute,
+		Remaining:  0,
+		ResetAt:    time.Now().Add(time.Minute),
+	}, nil)
+
 	rl := NewDistributedRateLimiter(
-		mockLimiter{allow: true, retry: time.Minute},
+		limiter,
 		3,
 		time.Minute,
 		FailClosed,
@@ -159,7 +157,18 @@ func TestSubjectOrIPKeyFuncUsesSubjectWhenAccessTokenValid(t *testing.T) {
 		t.Fatalf("sign access token: %v", err)
 	}
 
-	limiter := &recordingLimiter{allow: true}
+	ctrl := gomock.NewController(t)
+	limiter := NewMockLimiter(ctrl)
+	lastKey := ""
+	limiter.EXPECT().Allow(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, key string, policy RateLimitPolicy) (Decision, error) {
+		lastKey = key
+		return Decision{
+			Allowed:   true,
+			Remaining: max(policy.SustainedLimit-1, 0),
+			ResetAt:   time.Now().Add(policy.SustainedWindow),
+		}, nil
+	})
+
 	rl := NewDistributedRateLimiterWithKey(
 		limiter,
 		10,
@@ -180,8 +189,8 @@ func TestSubjectOrIPKeyFuncUsesSubjectWhenAccessTokenValid(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected request to pass, got %d", rr.Code)
 	}
-	if limiter.lastKey != "sub:42" {
-		t.Fatalf("expected subject key, got %q", limiter.lastKey)
+	if lastKey != "sub:42" {
+		t.Fatalf("expected subject key, got %q", lastKey)
 	}
 }
 
@@ -192,7 +201,18 @@ func TestSubjectOrIPKeyFuncFallsBackToIPWhenTokenInvalid(t *testing.T) {
 		"abcdefghijklmnopqrstuvwxyz123456",
 		"abcdefghijklmnopqrstuvwxyz654321",
 	)
-	limiter := &recordingLimiter{allow: true}
+	ctrl := gomock.NewController(t)
+	limiter := NewMockLimiter(ctrl)
+	lastKey := ""
+	limiter.EXPECT().Allow(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, key string, policy RateLimitPolicy) (Decision, error) {
+		lastKey = key
+		return Decision{
+			Allowed:   true,
+			Remaining: max(policy.SustainedLimit-1, 0),
+			ResetAt:   time.Now().Add(policy.SustainedWindow),
+		}, nil
+	})
+
 	rl := NewDistributedRateLimiterWithKey(
 		limiter,
 		10,
@@ -213,8 +233,8 @@ func TestSubjectOrIPKeyFuncFallsBackToIPWhenTokenInvalid(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected request to pass, got %d", rr.Code)
 	}
-	if limiter.lastKey != "10.0.0.1" {
-		t.Fatalf("expected IP key fallback, got %q", limiter.lastKey)
+	if lastKey != "10.0.0.1" {
+		t.Fatalf("expected IP key fallback, got %q", lastKey)
 	}
 }
 
@@ -315,8 +335,12 @@ func TestRequestBypassEvaluatorTrustedSubject(t *testing.T) {
 }
 
 func TestRateLimiterBypassSkipsLimiter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	limiter := NewMockLimiter(ctrl)
+	limiter.EXPECT().Allow(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
 	rl := NewDistributedRateLimiter(
-		mockLimiter{allow: false, retry: 5 * time.Second},
+		limiter,
 		1,
 		time.Minute,
 		FailClosed,

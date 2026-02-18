@@ -16,50 +16,9 @@ import (
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/repository"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/service"
+	servicegomock "github.com/sandeepkv93/everything-backend-starter-kit/internal/service/gomock"
+	"go.uber.org/mock/gomock"
 )
-
-type stubProductService struct {
-	createFn func(ctx context.Context, input service.CreateProductInput) (*domain.Product, error)
-	listFn   func(ctx context.Context, req repository.PageRequest) (repository.PageResult[domain.Product], error)
-	getFn    func(ctx context.Context, id uint) (*domain.Product, error)
-	updateFn func(ctx context.Context, id uint, input service.UpdateProductInput) (*domain.Product, error)
-	deleteFn func(ctx context.Context, id uint) error
-}
-
-func (s *stubProductService) Create(ctx context.Context, input service.CreateProductInput) (*domain.Product, error) {
-	if s.createFn != nil {
-		return s.createFn(ctx, input)
-	}
-	return &domain.Product{ID: 1, Name: input.Name, Description: input.Description, Price: input.Price}, nil
-}
-
-func (s *stubProductService) ListPaged(ctx context.Context, req repository.PageRequest) (repository.PageResult[domain.Product], error) {
-	if s.listFn != nil {
-		return s.listFn(ctx, req)
-	}
-	return repository.PageResult[domain.Product]{}, nil
-}
-
-func (s *stubProductService) GetByID(ctx context.Context, id uint) (*domain.Product, error) {
-	if s.getFn != nil {
-		return s.getFn(ctx, id)
-	}
-	return &domain.Product{ID: id}, nil
-}
-
-func (s *stubProductService) Update(ctx context.Context, id uint, input service.UpdateProductInput) (*domain.Product, error) {
-	if s.updateFn != nil {
-		return s.updateFn(ctx, id, input)
-	}
-	return &domain.Product{ID: id}, nil
-}
-
-func (s *stubProductService) DeleteByID(ctx context.Context, id uint) error {
-	if s.deleteFn != nil {
-		return s.deleteFn(ctx, id)
-	}
-	return nil
-}
 
 func productAccessTokenForTest(t *testing.T, perms []string) string {
 	t.Helper()
@@ -72,7 +31,8 @@ func productAccessTokenForTest(t *testing.T, perms []string) string {
 }
 
 func TestProductHandlerPaginationAndRBAC(t *testing.T) {
-	svc := &stubProductService{}
+	ctrl := gomock.NewController(t)
+	svc := servicegomock.NewMockProductService(ctrl)
 	h := NewProductHandler(svc)
 	jwt := security.NewJWTManager("iss", "aud", "abcdefghijklmnopqrstuvwxyz123456", "abcdefghijklmnopqrstuvwxyz654321")
 	rbac := service.NewRBACService()
@@ -95,12 +55,12 @@ func TestProductHandlerPaginationAndRBAC(t *testing.T) {
 	})
 
 	t.Run("list uses pagination defaults", func(t *testing.T) {
-		svc.listFn = func(ctx context.Context, req repository.PageRequest) (repository.PageResult[domain.Product], error) {
+		svc.EXPECT().ListPaged(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, req repository.PageRequest) (repository.PageResult[domain.Product], error) {
 			if req.Page != repository.DefaultPage || req.PageSize != repository.DefaultPageSize {
 				t.Fatalf("expected default pagination page=%d size=%d, got %+v", repository.DefaultPage, repository.DefaultPageSize, req)
 			}
 			return repository.PageResult[domain.Product]{Items: []domain.Product{{ID: 1, Name: "P", Price: 1.2}}, Page: req.Page, PageSize: req.PageSize, Total: 1, TotalPages: 1}, nil
-		}
+		})
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/products", nil)
 		req.Header.Set("Authorization", "Bearer "+productAccessTokenForTest(t, []string{"products:read"}))
 		rr := httptest.NewRecorder()
@@ -136,9 +96,9 @@ func TestProductHandlerPaginationAndRBAC(t *testing.T) {
 	})
 
 	t.Run("write allowed with products:write", func(t *testing.T) {
-		svc.createFn = func(ctx context.Context, input service.CreateProductInput) (*domain.Product, error) {
+		svc.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, input service.CreateProductInput) (*domain.Product, error) {
 			return &domain.Product{ID: 9, Name: input.Name, Description: input.Description, Price: input.Price}, nil
-		}
+		})
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(`{"name":"Demo Product","price":10}`))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+productAccessTokenForTest(t, []string{"products:write"}))
@@ -150,10 +110,7 @@ func TestProductHandlerPaginationAndRBAC(t *testing.T) {
 	})
 
 	t.Run("delete rejects malformed product id", func(t *testing.T) {
-		svc.deleteFn = func(ctx context.Context, id uint) error {
-			t.Fatalf("delete service should not be called for malformed id: %d", id)
-			return nil
-		}
+		svc.EXPECT().DeleteByID(gomock.Any(), gomock.Any()).Times(0)
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/products/12abc", nil)
 		req.Header.Set("Authorization", "Bearer "+productAccessTokenForTest(t, []string{"products:delete"}))
 		rr := httptest.NewRecorder()

@@ -9,42 +9,15 @@ import (
 
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/domain"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
+	"go.uber.org/mock/gomock"
 )
-
-type stubUserService struct {
-	perms []string
-	delay time.Duration
-	mu    sync.Mutex
-	calls int
-}
-
-func (s *stubUserService) GetByID(id uint) (*domain.User, []string, error) {
-	if s.delay > 0 {
-		time.Sleep(s.delay)
-	}
-	s.mu.Lock()
-	s.calls++
-	s.mu.Unlock()
-	return &domain.User{ID: id}, append([]string(nil), s.perms...), nil
-}
-
-func (s *stubUserService) List() ([]domain.User, error) {
-	return nil, nil
-}
-
-func (s *stubUserService) SetRoles(uint, []uint) error {
-	return nil
-}
-
-func (s *stubUserService) Calls() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.calls
-}
 
 func TestCachedPermissionResolverCachesBySession(t *testing.T) {
 	store := NewInMemoryRBACPermissionCacheStore()
-	userSvc := &stubUserService{perms: []string{"users:read"}}
+	ctrl := gomock.NewController(t)
+	userSvc := NewMockUserServiceInterface(ctrl)
+	userSvc.EXPECT().GetByID(uint(42)).Return(&domain.User{ID: 42}, []string{"users:read"}, nil).Times(1)
+
 	resolver := NewCachedPermissionResolver(store, userSvc, time.Minute)
 
 	claims := &security.Claims{}
@@ -58,9 +31,6 @@ func TestCachedPermissionResolverCachesBySession(t *testing.T) {
 	if len(perms) != 1 || perms[0] != "users:read" {
 		t.Fatalf("unexpected perms: %+v", perms)
 	}
-	if userSvc.Calls() != 1 {
-		t.Fatalf("expected one user service call, got %d", userSvc.Calls())
-	}
 
 	perms, err = resolver.ResolvePermissions(context.Background(), claims)
 	if err != nil {
@@ -69,14 +39,13 @@ func TestCachedPermissionResolverCachesBySession(t *testing.T) {
 	if len(perms) != 1 || perms[0] != "users:read" {
 		t.Fatalf("unexpected perms second call: %+v", perms)
 	}
-	if userSvc.Calls() != 1 {
-		t.Fatalf("expected cache hit and unchanged user service calls, got %d", userSvc.Calls())
-	}
 }
 
 func TestCachedPermissionResolverInvalidateUser(t *testing.T) {
 	store := NewInMemoryRBACPermissionCacheStore()
-	userSvc := &stubUserService{perms: []string{"roles:read"}}
+	ctrl := gomock.NewController(t)
+	userSvc := NewMockUserServiceInterface(ctrl)
+	userSvc.EXPECT().GetByID(uint(7)).Return(&domain.User{ID: 7}, []string{"roles:read"}, nil).Times(2)
 	resolver := NewCachedPermissionResolver(store, userSvc, time.Minute)
 
 	claims := &security.Claims{}
@@ -92,17 +61,25 @@ func TestCachedPermissionResolverInvalidateUser(t *testing.T) {
 	if _, err := resolver.ResolvePermissions(context.Background(), claims); err != nil {
 		t.Fatalf("resolve permissions after invalidate: %v", err)
 	}
-	if userSvc.Calls() != 2 {
-		t.Fatalf("expected cache miss after invalidate, got user service calls=%d", userSvc.Calls())
-	}
 }
 
 func TestCachedPermissionResolverSingleflightDedupesConcurrentMisses(t *testing.T) {
 	store := NewInMemoryRBACPermissionCacheStore()
-	userSvc := &stubUserService{
-		perms: []string{"roles:read", "roles:write"},
-		delay: 40 * time.Millisecond,
-	}
+	ctrl := gomock.NewController(t)
+	userSvc := NewMockUserServiceInterface(ctrl)
+
+	var (
+		calls int
+		mu    sync.Mutex
+	)
+	userSvc.EXPECT().GetByID(uint(55)).DoAndReturn(func(uint) (*domain.User, []string, error) {
+		time.Sleep(40 * time.Millisecond)
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		return &domain.User{ID: 55}, []string{"roles:read", "roles:write"}, nil
+	}).Times(1)
+
 	resolver := NewCachedPermissionResolver(store, userSvc, time.Minute)
 
 	claims := &security.Claims{}
@@ -135,7 +112,10 @@ func TestCachedPermissionResolverSingleflightDedupesConcurrentMisses(t *testing.
 			t.Fatalf("resolve failed: %v", err)
 		}
 	}
-	if userSvc.Calls() != 1 {
-		t.Fatalf("expected singleflight dedupe to one GetByID call, got %d", userSvc.Calls())
+
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("expected singleflight dedupe to one GetByID call, got %d", calls)
 	}
 }

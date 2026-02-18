@@ -13,6 +13,8 @@ import (
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/domain"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/repository"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
+	"go.uber.org/mock/gomock"
+	"golang.org/x/oauth2"
 	"gorm.io/gorm"
 )
 
@@ -610,7 +612,11 @@ func newAuthServiceFixtureWithSessionRepo(sessionRepo repository.SessionReposito
 	oauthRepo := newFakeOAuthRepo()
 	emailNotifier := &fakeEmailVerificationNotifier{}
 	passwordNotifier := &fakePasswordResetNotifier{}
-	oauthSvc := NewOAuthService(testOAuthProvider{}, userRepo, oauthRepo, roleRepo)
+	ctrl := gomock.NewController(tNop{})
+	oauthProvider := NewMockOAuthProvider(ctrl)
+	oauthProvider.EXPECT().Exchange(gomock.Any(), gomock.Any()).AnyTimes().Return(&oauth2.Token{AccessToken: "token"}, nil)
+	oauthProvider.EXPECT().FetchUserInfo(gomock.Any(), gomock.Any()).AnyTimes().Return(&OAuthUserInfo{ProviderUserID: "provider-id", Email: "user@example.com", EmailVerified: true}, nil)
+	oauthSvc := NewOAuthService(oauthProvider, userRepo, oauthRepo, roleRepo)
 	tokenSvc := newTestTokenService(sessionRepo)
 	userSvc := NewUserService(userRepo, NewRBACService())
 	authSvc := NewAuthService(cfg, oauthSvc, tokenSvc, userSvc, roleRepo, localRepo, verifyRepo, emailNotifier, passwordNotifier)
@@ -627,6 +633,12 @@ func newAuthServiceFixtureWithSessionRepo(sessionRepo repository.SessionReposito
 		passwordNotifier: passwordNotifier,
 	}
 }
+
+type tNop struct{}
+
+func (tNop) Errorf(string, ...any) {}
+func (tNop) Fatalf(string, ...any) {}
+func (tNop) Helper()               {}
 
 func (fx *authServiceFixture) seedUser(email, name string) uint {
 	u := &domain.User{Email: strings.ToLower(strings.TrimSpace(email)), Name: name, Status: "active"}

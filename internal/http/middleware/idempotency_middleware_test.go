@@ -17,6 +17,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/service"
+	servicegomock "github.com/sandeepkv93/everything-backend-starter-kit/internal/service/gomock"
+	"go.uber.org/mock/gomock"
 )
 
 type beginCall struct {
@@ -34,32 +36,43 @@ type completeCall struct {
 	ttl         time.Duration
 }
 
-type fakeIdempotencyStore struct {
+type idempotencyStoreConfig struct {
 	beginResult service.IdempotencyBeginResult
 	beginErr    error
 	completeErr error
-
-	beginCalls    []beginCall
-	completeCalls []completeCall
 }
 
-func (s *fakeIdempotencyStore) Begin(_ context.Context, scope, key, fingerprint string, ttl time.Duration) (service.IdempotencyBeginResult, error) {
-	s.beginCalls = append(s.beginCalls, beginCall{scope: scope, key: key, fingerprint: fingerprint, ttl: ttl})
-	if s.beginErr != nil {
-		return service.IdempotencyBeginResult{}, s.beginErr
-	}
-	return s.beginResult, nil
-}
+func newIdempotencyStoreMock(t *testing.T, cfg idempotencyStoreConfig) (*servicegomock.MockIdempotencyStore, *[]beginCall, *[]completeCall) {
+	t.Helper()
 
-func (s *fakeIdempotencyStore) Complete(_ context.Context, scope, key, fingerprint string, response service.CachedHTTPResponse, ttl time.Duration) error {
-	s.completeCalls = append(s.completeCalls, completeCall{
-		scope:       scope,
-		key:         key,
-		fingerprint: fingerprint,
-		response:    response,
-		ttl:         ttl,
-	})
-	return s.completeErr
+	ctrl := gomock.NewController(t)
+	store := servicegomock.NewMockIdempotencyStore(ctrl)
+	beginCalls := []beginCall{}
+	completeCalls := []completeCall{}
+
+	store.EXPECT().Begin(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(_ context.Context, scope, key, fingerprint string, ttl time.Duration) (service.IdempotencyBeginResult, error) {
+			beginCalls = append(beginCalls, beginCall{scope: scope, key: key, fingerprint: fingerprint, ttl: ttl})
+			if cfg.beginErr != nil {
+				return service.IdempotencyBeginResult{}, cfg.beginErr
+			}
+			return cfg.beginResult, nil
+		},
+	)
+	store.EXPECT().Complete(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(_ context.Context, scope, key, fingerprint string, response service.CachedHTTPResponse, ttl time.Duration) error {
+			completeCalls = append(completeCalls, completeCall{
+				scope:       scope,
+				key:         key,
+				fingerprint: fingerprint,
+				response:    response,
+				ttl:         ttl,
+			})
+			return cfg.completeErr
+		},
+	)
+
+	return store, &beginCalls, &completeCalls
 }
 
 type errReadCloser struct{}
@@ -79,7 +92,7 @@ func TestIdempotencyMiddlewareRejectsMissingAndTooLongKey(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			store := &fakeIdempotencyStore{}
+			store, beginCalls, _ := newIdempotencyStoreMock(t, idempotencyStoreConfig{})
 			mw := NewIdempotencyMiddleware(store, time.Minute)
 			h := mw.Middleware("register")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusCreated)
@@ -95,15 +108,15 @@ func TestIdempotencyMiddlewareRejectsMissingAndTooLongKey(t *testing.T) {
 			if rr.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400, got %d", rr.Code)
 			}
-			if len(store.beginCalls) != 0 {
-				t.Fatalf("expected no begin calls, got %d", len(store.beginCalls))
+			if len(*beginCalls) != 0 {
+				t.Fatalf("expected no begin calls, got %d", len(*beginCalls))
 			}
 		})
 	}
 }
 
 func TestIdempotencyMiddlewareRejectsUnreadableBody(t *testing.T) {
-	store := &fakeIdempotencyStore{}
+	store, beginCalls, _ := newIdempotencyStoreMock(t, idempotencyStoreConfig{})
 	mw := NewIdempotencyMiddleware(store, time.Minute)
 	h := mw.Middleware("register")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -118,13 +131,13 @@ func TestIdempotencyMiddlewareRejectsUnreadableBody(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
 	}
-	if len(store.beginCalls) != 0 {
-		t.Fatalf("expected no begin calls on body read error, got %d", len(store.beginCalls))
+	if len(*beginCalls) != 0 {
+		t.Fatalf("expected no begin calls on body read error, got %d", len(*beginCalls))
 	}
 }
 
 func TestIdempotencyMiddlewareBeginErrorReturnsInternal(t *testing.T) {
-	store := &fakeIdempotencyStore{beginErr: errors.New("redis unavailable")}
+	store, beginCalls, completeCalls := newIdempotencyStoreMock(t, idempotencyStoreConfig{beginErr: errors.New("redis unavailable")})
 	mw := NewIdempotencyMiddleware(store, 2*time.Minute)
 	h := mw.Middleware("register")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -138,11 +151,11 @@ func TestIdempotencyMiddlewareBeginErrorReturnsInternal(t *testing.T) {
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rr.Code)
 	}
-	if len(store.beginCalls) != 1 {
-		t.Fatalf("expected one begin call, got %d", len(store.beginCalls))
+	if len(*beginCalls) != 1 {
+		t.Fatalf("expected one begin call, got %d", len(*beginCalls))
 	}
-	if len(store.completeCalls) != 0 {
-		t.Fatalf("expected no complete calls when begin fails, got %d", len(store.completeCalls))
+	if len(*completeCalls) != 0 {
+		t.Fatalf("expected no complete calls when begin fails, got %d", len(*completeCalls))
 	}
 }
 
@@ -172,7 +185,7 @@ func TestIdempotencyMiddlewareBeginStateBranches(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			store := &fakeIdempotencyStore{beginResult: service.IdempotencyBeginResult{State: tc.beginState, Cached: tc.cached}}
+			store, _, completeCalls := newIdempotencyStoreMock(t, idempotencyStoreConfig{beginResult: service.IdempotencyBeginResult{State: tc.beginState, Cached: tc.cached}})
 			mw := NewIdempotencyMiddleware(store, time.Minute)
 			h := mw.Middleware("register")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusCreated)
@@ -199,8 +212,8 @@ func TestIdempotencyMiddlewareBeginStateBranches(t *testing.T) {
 			} else if got := rr.Header().Get("X-Idempotency-Replayed"); got != "" {
 				t.Fatalf("expected no replay header, got %q", got)
 			}
-			if len(store.completeCalls) != 0 {
-				t.Fatalf("expected no complete calls for begin state %s, got %d", tc.beginState, len(store.completeCalls))
+			if len(*completeCalls) != 0 {
+				t.Fatalf("expected no complete calls for begin state %s, got %d", tc.beginState, len(*completeCalls))
 			}
 		})
 	}
@@ -208,7 +221,7 @@ func TestIdempotencyMiddlewareBeginStateBranches(t *testing.T) {
 
 func TestIdempotencyMiddlewareCompleteBehavior(t *testing.T) {
 	t.Run("downstream 5xx does not persist complete", func(t *testing.T) {
-		store := &fakeIdempotencyStore{beginResult: service.IdempotencyBeginResult{State: service.IdempotencyStateNew}}
+		store, _, completeCalls := newIdempotencyStoreMock(t, idempotencyStoreConfig{beginResult: service.IdempotencyBeginResult{State: service.IdempotencyStateNew}})
 		mw := NewIdempotencyMiddleware(store, time.Minute)
 		h := mw.Middleware("register")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "downstream failed", http.StatusInternalServerError)
@@ -222,16 +235,13 @@ func TestIdempotencyMiddlewareCompleteBehavior(t *testing.T) {
 		if rr.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d", rr.Code)
 		}
-		if len(store.completeCalls) != 0 {
-			t.Fatalf("expected no complete calls for 5xx response, got %d", len(store.completeCalls))
+		if len(*completeCalls) != 0 {
+			t.Fatalf("expected no complete calls for 5xx response, got %d", len(*completeCalls))
 		}
 	})
 
 	t.Run("complete store failure does not fail response", func(t *testing.T) {
-		store := &fakeIdempotencyStore{
-			beginResult: service.IdempotencyBeginResult{State: service.IdempotencyStateNew},
-			completeErr: errors.New("complete failed"),
-		}
+		store, _, completeCalls := newIdempotencyStoreMock(t, idempotencyStoreConfig{beginResult: service.IdempotencyBeginResult{State: service.IdempotencyStateNew}, completeErr: errors.New("complete failed")})
 		mw := NewIdempotencyMiddleware(store, 2*time.Minute)
 		h := mw.Middleware("register")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -250,10 +260,10 @@ func TestIdempotencyMiddlewareCompleteBehavior(t *testing.T) {
 		if rr.Body.String() != `{"ok":true}` {
 			t.Fatalf("expected original response body, got %q", rr.Body.String())
 		}
-		if len(store.completeCalls) != 1 {
-			t.Fatalf("expected one complete call, got %d", len(store.completeCalls))
+		if len(*completeCalls) != 1 {
+			t.Fatalf("expected one complete call, got %d", len(*completeCalls))
 		}
-		cc := store.completeCalls[0]
+		cc := (*completeCalls)[0]
 		if cc.response.StatusCode != http.StatusCreated {
 			t.Fatalf("expected cached status 201, got %d", cc.response.StatusCode)
 		}
@@ -354,7 +364,7 @@ func FuzzIdempotencyMiddlewareKeyAndBodyRobustness(f *testing.F) {
 		method = sanitizeFuzzMethod(method)
 		path = sanitizeFuzzPath(path)
 
-		store := &fakeIdempotencyStore{beginResult: service.IdempotencyBeginResult{State: service.IdempotencyStateNew}}
+		store, beginCalls, completeCalls := newIdempotencyStoreMock(t, idempotencyStoreConfig{beginResult: service.IdempotencyBeginResult{State: service.IdempotencyStateNew}})
 		mw := NewIdempotencyMiddleware(store, time.Minute)
 		handler := mw.Middleware(scope)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			gotBody, err := io.ReadAll(r.Body)
@@ -393,8 +403,8 @@ func FuzzIdempotencyMiddlewareKeyAndBodyRobustness(f *testing.F) {
 			if rr.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400 for invalid/missing key, got %d", rr.Code)
 			}
-			if len(store.beginCalls) != 0 {
-				t.Fatalf("expected no begin calls for invalid key path, got %d", len(store.beginCalls))
+			if len(*beginCalls) != 0 {
+				t.Fatalf("expected no begin calls for invalid key path, got %d", len(*beginCalls))
 			}
 			return
 		}
@@ -402,13 +412,13 @@ func FuzzIdempotencyMiddlewareKeyAndBodyRobustness(f *testing.F) {
 		if rr.Code != http.StatusCreated {
 			t.Fatalf("expected 201 for valid key flow, got %d", rr.Code)
 		}
-		if len(store.beginCalls) != 1 {
-			t.Fatalf("expected one begin call, got %d", len(store.beginCalls))
+		if len(*beginCalls) != 1 {
+			t.Fatalf("expected one begin call, got %d", len(*beginCalls))
 		}
-		if len(store.completeCalls) != 1 {
-			t.Fatalf("expected one complete call, got %d", len(store.completeCalls))
+		if len(*completeCalls) != 1 {
+			t.Fatalf("expected one complete call, got %d", len(*completeCalls))
 		}
-		if store.beginCalls[0].fingerprint == "" || store.completeCalls[0].fingerprint == "" {
+		if (*beginCalls)[0].fingerprint == "" || (*completeCalls)[0].fingerprint == "" {
 			t.Fatal("expected non-empty fingerprint")
 		}
 	})

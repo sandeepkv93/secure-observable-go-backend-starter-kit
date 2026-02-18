@@ -15,6 +15,8 @@ import (
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/http/middleware"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/service"
+	servicegomock "github.com/sandeepkv93/everything-backend-starter-kit/internal/service/gomock"
+	"go.uber.org/mock/gomock"
 )
 
 type authErrorEnvelope struct {
@@ -23,126 +25,6 @@ type authErrorEnvelope struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
-}
-
-type stubAuthService struct {
-	parseUserIDFn func(subject string) (uint, error)
-	refreshFn     func(refreshToken, ua, ip string) (*service.LoginResult, error)
-	logoutFn      func(userID uint) error
-	changePassFn  func(userID uint, currentPassword, newPassword string) error
-
-	requestVerifyFn func(email string) error
-	confirmVerifyFn func(token string) error
-	forgotFn        func(email string) error
-	resetFn         func(token, newPassword string) error
-	loginLocalFn    func(email, password, ua, ip string) (*service.LoginResult, error)
-}
-
-func (s *stubAuthService) GoogleLoginURL(state string) string { return "" }
-
-func (s *stubAuthService) LoginWithGoogleCode(code, ua, ip string) (*service.LoginResult, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (s *stubAuthService) RegisterLocal(email, name, password, ua, ip string) (*service.LoginResult, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (s *stubAuthService) LoginWithLocalPassword(email, password, ua, ip string) (*service.LoginResult, error) {
-	if s.loginLocalFn != nil {
-		return s.loginLocalFn(email, password, ua, ip)
-	}
-	return nil, errors.New("not implemented")
-}
-
-func (s *stubAuthService) RequestLocalEmailVerification(email string) error {
-	if s.requestVerifyFn != nil {
-		return s.requestVerifyFn(email)
-	}
-	return nil
-}
-
-func (s *stubAuthService) ConfirmLocalEmailVerification(token string) error {
-	if s.confirmVerifyFn != nil {
-		return s.confirmVerifyFn(token)
-	}
-	return nil
-}
-
-func (s *stubAuthService) ForgotLocalPassword(email string) error {
-	if s.forgotFn != nil {
-		return s.forgotFn(email)
-	}
-	return nil
-}
-
-func (s *stubAuthService) ResetLocalPassword(token, newPassword string) error {
-	if s.resetFn != nil {
-		return s.resetFn(token, newPassword)
-	}
-	return nil
-}
-
-func (s *stubAuthService) ChangeLocalPassword(userID uint, currentPassword, newPassword string) error {
-	if s.changePassFn != nil {
-		return s.changePassFn(userID, currentPassword, newPassword)
-	}
-	return nil
-}
-
-func (s *stubAuthService) Refresh(refreshToken, ua, ip string) (*service.LoginResult, error) {
-	if s.refreshFn != nil {
-		return s.refreshFn(refreshToken, ua, ip)
-	}
-	return nil, errors.New("not implemented")
-}
-
-func (s *stubAuthService) Logout(userID uint) error {
-	if s.logoutFn != nil {
-		return s.logoutFn(userID)
-	}
-	return nil
-}
-
-func (s *stubAuthService) ParseUserID(subject string) (uint, error) {
-	if s.parseUserIDFn != nil {
-		return s.parseUserIDFn(subject)
-	}
-	return 0, errors.New("not implemented")
-}
-
-type stubAuthAbuseGuard struct {
-	checkFn    func(ctx context.Context, scope service.AuthAbuseScope, identity, ip string) (time.Duration, error)
-	registerFn func(ctx context.Context, scope service.AuthAbuseScope, identity, ip string) (time.Duration, error)
-	resetFn    func(ctx context.Context, scope service.AuthAbuseScope, identity, ip string) error
-
-	checkCalls    int
-	registerCalls int
-	resetCalls    int
-}
-
-func (s *stubAuthAbuseGuard) Check(ctx context.Context, scope service.AuthAbuseScope, identity, ip string) (time.Duration, error) {
-	s.checkCalls++
-	if s.checkFn != nil {
-		return s.checkFn(ctx, scope, identity, ip)
-	}
-	return 0, nil
-}
-
-func (s *stubAuthAbuseGuard) RegisterFailure(ctx context.Context, scope service.AuthAbuseScope, identity, ip string) (time.Duration, error) {
-	s.registerCalls++
-	if s.registerFn != nil {
-		return s.registerFn(ctx, scope, identity, ip)
-	}
-	return 0, nil
-}
-
-func (s *stubAuthAbuseGuard) Reset(ctx context.Context, scope service.AuthAbuseScope, identity, ip string) error {
-	s.resetCalls++
-	if s.resetFn != nil {
-		return s.resetFn(ctx, scope, identity, ip)
-	}
-	return nil
 }
 
 func withClaims(r *http.Request, sub string) *http.Request {
@@ -183,7 +65,10 @@ func TestAuthHandlerLocalChangePasswordBranchesAndCookieSideEffects(t *testing.T
 	cookieMgr := security.NewCookieManager("", false, "lax")
 
 	t.Run("missing auth context", func(t *testing.T) {
-		h := NewAuthHandler(&stubAuthService{}, &stubAuthAbuseGuard{}, cookieMgr, nil, "state", 24*time.Hour)
+		ctrl := gomock.NewController(t)
+		authSvc := servicegomock.NewMockAuthServiceInterface(ctrl)
+		abuse := servicegomock.NewMockAuthAbuseGuard(ctrl)
+		h := NewAuthHandler(authSvc, abuse, cookieMgr, nil, "state", 24*time.Hour)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/change", strings.NewReader(`{"current_password":"a","new_password":"b"}`))
 		rr := httptest.NewRecorder()
 
@@ -199,10 +84,11 @@ func TestAuthHandlerLocalChangePasswordBranchesAndCookieSideEffects(t *testing.T
 	})
 
 	t.Run("invalid subject", func(t *testing.T) {
-		authSvc := &stubAuthService{parseUserIDFn: func(subject string) (uint, error) {
-			return 0, errors.New("bad subject")
-		}}
-		h := NewAuthHandler(authSvc, &stubAuthAbuseGuard{}, cookieMgr, nil, "state", 24*time.Hour)
+		ctrl := gomock.NewController(t)
+		authSvc := servicegomock.NewMockAuthServiceInterface(ctrl)
+		abuse := servicegomock.NewMockAuthAbuseGuard(ctrl)
+		authSvc.EXPECT().ParseUserID("bad").Return(uint(0), errors.New("bad subject"))
+		h := NewAuthHandler(authSvc, abuse, cookieMgr, nil, "state", 24*time.Hour)
 		req := withClaims(httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/change", strings.NewReader(`{"current_password":"a","new_password":"b"}`)), "bad")
 		rr := httptest.NewRecorder()
 
@@ -226,11 +112,12 @@ func TestAuthHandlerLocalChangePasswordBranchesAndCookieSideEffects(t *testing.T
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				authSvc := &stubAuthService{
-					parseUserIDFn: func(subject string) (uint, error) { return 77, nil },
-					changePassFn:  func(userID uint, currentPassword, newPassword string) error { return tc.err },
-				}
-				h := NewAuthHandler(authSvc, &stubAuthAbuseGuard{}, cookieMgr, nil, "state", 24*time.Hour)
+				ctrl := gomock.NewController(t)
+				authSvc := servicegomock.NewMockAuthServiceInterface(ctrl)
+				abuse := servicegomock.NewMockAuthAbuseGuard(ctrl)
+				authSvc.EXPECT().ParseUserID("77").Return(uint(77), nil)
+				authSvc.EXPECT().ChangeLocalPassword(uint(77), "old", "new").Return(tc.err)
+				h := NewAuthHandler(authSvc, abuse, cookieMgr, nil, "state", 24*time.Hour)
 				req := withClaims(httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/change", strings.NewReader(`{"current_password":"old","new_password":"new"}`)), "77")
 				rr := httptest.NewRecorder()
 
@@ -247,11 +134,12 @@ func TestAuthHandlerLocalChangePasswordBranchesAndCookieSideEffects(t *testing.T
 	})
 
 	t.Run("success clears auth cookies", func(t *testing.T) {
-		authSvc := &stubAuthService{
-			parseUserIDFn: func(subject string) (uint, error) { return 42, nil },
-			changePassFn:  func(userID uint, currentPassword, newPassword string) error { return nil },
-		}
-		h := NewAuthHandler(authSvc, &stubAuthAbuseGuard{}, cookieMgr, nil, "state", 24*time.Hour)
+		ctrl := gomock.NewController(t)
+		authSvc := servicegomock.NewMockAuthServiceInterface(ctrl)
+		abuse := servicegomock.NewMockAuthAbuseGuard(ctrl)
+		authSvc.EXPECT().ParseUserID("42").Return(uint(42), nil)
+		authSvc.EXPECT().ChangeLocalPassword(uint(42), "old", "new").Return(nil)
+		h := NewAuthHandler(authSvc, abuse, cookieMgr, nil, "state", 24*time.Hour)
 		req := withClaims(httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/change", strings.NewReader(`{"current_password":"old","new_password":"new"}`)), "42")
 		rr := httptest.NewRecorder()
 
@@ -273,10 +161,13 @@ func TestAuthHandlerBypassAndLocalFlowErrorMappings(t *testing.T) {
 	cookieMgr := security.NewCookieManager("", false, "lax")
 
 	t.Run("local login bypass trusted subnet skips abuse guard check", func(t *testing.T) {
-		abuse := &stubAuthAbuseGuard{}
-		authSvc := &stubAuthService{loginLocalFn: func(email, password, ua, ip string) (*service.LoginResult, error) {
-			return &service.LoginResult{User: &domain.User{ID: 1}, AccessToken: "a", RefreshToken: "r", CSRFToken: "c", ExpiresAt: time.Now().Add(time.Hour)}, nil
-		}}
+		ctrl := gomock.NewController(t)
+		authSvc := servicegomock.NewMockAuthServiceInterface(ctrl)
+		abuse := servicegomock.NewMockAuthAbuseGuard(ctrl)
+		abuse.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		authSvc.EXPECT().LoginWithLocalPassword("u@example.com", "StrongPass123!", gomock.Any(), gomock.Any()).Return(
+			&service.LoginResult{User: &domain.User{ID: 1}, AccessToken: "a", RefreshToken: "r", CSRFToken: "c", ExpiresAt: time.Now().Add(time.Hour)}, nil,
+		)
 		h := NewAuthHandler(authSvc, abuse, cookieMgr, func(r *http.Request) (bool, string) {
 			return true, "trusted_subnet"
 		}, "state", 24*time.Hour)
@@ -287,16 +178,15 @@ func TestAuthHandlerBypassAndLocalFlowErrorMappings(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", rr.Code)
 		}
-		if abuse.checkCalls != 0 {
-			t.Fatalf("expected abuse check to be bypassed, got %d calls", abuse.checkCalls)
-		}
 	})
 
 	t.Run("local login fallback uses abuse guard and can rate limit", func(t *testing.T) {
-		abuse := &stubAuthAbuseGuard{checkFn: func(ctx context.Context, scope service.AuthAbuseScope, identity, ip string) (time.Duration, error) {
-			return 5 * time.Second, nil
-		}}
-		h := NewAuthHandler(&stubAuthService{}, abuse, cookieMgr, nil, "state", 24*time.Hour)
+		ctrl := gomock.NewController(t)
+		authSvc := servicegomock.NewMockAuthServiceInterface(ctrl)
+		abuse := servicegomock.NewMockAuthAbuseGuard(ctrl)
+		abuse.EXPECT().Check(gomock.Any(), service.AuthAbuseScopeLogin, "u@example.com", gomock.Any()).Return(5*time.Second, nil)
+		authSvc.EXPECT().LoginWithLocalPassword(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		h := NewAuthHandler(authSvc, abuse, cookieMgr, nil, "state", 24*time.Hour)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"u@example.com","password":"bad"}`))
 		rr := httptest.NewRecorder()
 
@@ -304,14 +194,14 @@ func TestAuthHandlerBypassAndLocalFlowErrorMappings(t *testing.T) {
 		if rr.Code != http.StatusTooManyRequests {
 			t.Fatalf("expected 429, got %d", rr.Code)
 		}
-		if abuse.checkCalls != 1 {
-			t.Fatalf("expected abuse check call, got %d", abuse.checkCalls)
-		}
 	})
 
 	t.Run("password forgot bypass trusted actor skips abuse guard", func(t *testing.T) {
-		abuse := &stubAuthAbuseGuard{}
-		authSvc := &stubAuthService{forgotFn: func(email string) error { return nil }}
+		ctrl := gomock.NewController(t)
+		authSvc := servicegomock.NewMockAuthServiceInterface(ctrl)
+		abuse := servicegomock.NewMockAuthAbuseGuard(ctrl)
+		abuse.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+		authSvc.EXPECT().ForgotLocalPassword("u@example.com").Return(nil)
 		h := NewAuthHandler(authSvc, abuse, cookieMgr, func(r *http.Request) (bool, string) { return true, "trusted_actor" }, "state", 24*time.Hour)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password/forgot", strings.NewReader(`{"email":"u@example.com"}`))
 		rr := httptest.NewRecorder()
@@ -320,13 +210,13 @@ func TestAuthHandlerBypassAndLocalFlowErrorMappings(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", rr.Code)
 		}
-		if abuse.checkCalls != 0 {
-			t.Fatalf("expected no abuse check when bypassed, got %d", abuse.checkCalls)
-		}
 	})
 
 	t.Run("verify/forgot/reset payload and service mapping", func(t *testing.T) {
-		h := NewAuthHandler(&stubAuthService{}, &stubAuthAbuseGuard{}, cookieMgr, nil, "state", 24*time.Hour)
+		ctrl := gomock.NewController(t)
+		authSvc := servicegomock.NewMockAuthServiceInterface(ctrl)
+		abuse := servicegomock.NewMockAuthAbuseGuard(ctrl)
+		h := NewAuthHandler(authSvc, abuse, cookieMgr, nil, "state", 24*time.Hour)
 
 		invalidJSON := bytes.NewBufferString(`{"email":`)
 		rr := httptest.NewRecorder()
@@ -355,13 +245,15 @@ func TestAuthHandlerBypassAndLocalFlowErrorMappings(t *testing.T) {
 	})
 
 	t.Run("verify/forgot/reset service classification", func(t *testing.T) {
-		authSvc := &stubAuthService{
-			requestVerifyFn: func(email string) error { return service.ErrLocalAuthDisabled },
-			confirmVerifyFn: func(token string) error { return service.ErrInvalidVerifyToken },
-			forgotFn:        func(email string) error { return service.ErrLocalAuthDisabled },
-			resetFn:         func(token, newPassword string) error { return service.ErrWeakPassword },
-		}
-		h := NewAuthHandler(authSvc, &stubAuthAbuseGuard{}, cookieMgr, nil, "state", 24*time.Hour)
+		ctrl := gomock.NewController(t)
+		authSvc := servicegomock.NewMockAuthServiceInterface(ctrl)
+		abuse := servicegomock.NewMockAuthAbuseGuard(ctrl)
+		abuse.EXPECT().Check(gomock.Any(), service.AuthAbuseScopeForgot, "u@example.com", gomock.Any()).Return(time.Duration(0), nil)
+		authSvc.EXPECT().RequestLocalEmailVerification("u@example.com").Return(service.ErrLocalAuthDisabled)
+		authSvc.EXPECT().ConfirmLocalEmailVerification("x").Return(service.ErrInvalidVerifyToken)
+		authSvc.EXPECT().ForgotLocalPassword("u@example.com").Return(service.ErrLocalAuthDisabled)
+		authSvc.EXPECT().ResetLocalPassword("x", "weak").Return(service.ErrWeakPassword)
+		h := NewAuthHandler(authSvc, abuse, cookieMgr, nil, "state", 24*time.Hour)
 
 		rr := httptest.NewRecorder()
 		h.LocalVerifyRequest(rr, httptest.NewRequest(http.MethodPost, "/api/v1/auth/verify/request", strings.NewReader(`{"email":"u@example.com"}`)))
@@ -397,16 +289,17 @@ func TestAuthHandlerRefreshAndLogoutCookieSideEffects(t *testing.T) {
 	cookieMgr := security.NewCookieManager("", false, "lax")
 
 	t.Run("refresh success sets token cookies", func(t *testing.T) {
-		authSvc := &stubAuthService{refreshFn: func(refreshToken, ua, ip string) (*service.LoginResult, error) {
-			return &service.LoginResult{
-				User:         &domain.User{ID: 9},
-				AccessToken:  "new-access",
-				RefreshToken: "new-refresh",
-				CSRFToken:    "new-csrf",
-				ExpiresAt:    time.Now().Add(time.Hour),
-			}, nil
-		}}
-		h := NewAuthHandler(authSvc, &stubAuthAbuseGuard{}, cookieMgr, nil, "state", 24*time.Hour)
+		ctrl := gomock.NewController(t)
+		authSvc := servicegomock.NewMockAuthServiceInterface(ctrl)
+		abuse := servicegomock.NewMockAuthAbuseGuard(ctrl)
+		authSvc.EXPECT().Refresh("old-refresh", gomock.Any(), gomock.Any()).Return(&service.LoginResult{
+			User:         &domain.User{ID: 9},
+			AccessToken:  "new-access",
+			RefreshToken: "new-refresh",
+			CSRFToken:    "new-csrf",
+			ExpiresAt:    time.Now().Add(time.Hour),
+		}, nil)
+		h := NewAuthHandler(authSvc, abuse, cookieMgr, nil, "state", 24*time.Hour)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
 		req.AddCookie(&http.Cookie{Name: "refresh_token", Value: "old-refresh"})
 		rr := httptest.NewRecorder()
@@ -424,11 +317,12 @@ func TestAuthHandlerRefreshAndLogoutCookieSideEffects(t *testing.T) {
 	})
 
 	t.Run("logout success clears cookies", func(t *testing.T) {
-		authSvc := &stubAuthService{
-			parseUserIDFn: func(subject string) (uint, error) { return 55, nil },
-			logoutFn:      func(userID uint) error { return nil },
-		}
-		h := NewAuthHandler(authSvc, &stubAuthAbuseGuard{}, cookieMgr, nil, "state", 24*time.Hour)
+		ctrl := gomock.NewController(t)
+		authSvc := servicegomock.NewMockAuthServiceInterface(ctrl)
+		abuse := servicegomock.NewMockAuthAbuseGuard(ctrl)
+		authSvc.EXPECT().ParseUserID("55").Return(uint(55), nil)
+		authSvc.EXPECT().Logout(uint(55)).Return(nil)
+		h := NewAuthHandler(authSvc, abuse, cookieMgr, nil, "state", 24*time.Hour)
 		req := withClaims(httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil), "55")
 		rr := httptest.NewRecorder()
 

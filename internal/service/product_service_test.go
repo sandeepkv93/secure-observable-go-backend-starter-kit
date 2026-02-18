@@ -7,85 +7,14 @@ import (
 
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/domain"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/repository"
+	repogomock "github.com/sandeepkv93/everything-backend-starter-kit/internal/repository/gomock"
+	"go.uber.org/mock/gomock"
 )
 
-type stubProductRepo struct {
-	items  map[uint]domain.Product
-	nextID uint
-}
-
-func (s *stubProductRepo) Create(product *domain.Product) error {
-	if s.items == nil {
-		s.items = map[uint]domain.Product{}
-	}
-	if s.nextID == 0 {
-		s.nextID = 1
-	}
-	product.ID = s.nextID
-	s.nextID++
-	s.items[product.ID] = *product
-	return nil
-}
-
-func (s *stubProductRepo) FindByID(id uint) (*domain.Product, error) {
-	product, ok := s.items[id]
-	if !ok {
-		return nil, repository.ErrProductNotFound
-	}
-	cp := product
-	return &cp, nil
-}
-
-func (s *stubProductRepo) ListPaged(req repository.PageRequest) (repository.PageResult[domain.Product], error) {
-	normalized := repository.PageRequest{Page: req.Page, PageSize: req.PageSize}
-	if normalized.Page < 1 {
-		normalized.Page = repository.DefaultPage
-	}
-	if normalized.PageSize < 1 {
-		normalized.PageSize = repository.DefaultPageSize
-	}
-	items := make([]domain.Product, 0, len(s.items))
-	for _, p := range s.items {
-		items = append(items, p)
-	}
-	total := int64(len(items))
-	return repository.PageResult[domain.Product]{
-		Items:      items,
-		Page:       normalized.Page,
-		PageSize:   normalized.PageSize,
-		Total:      total,
-		TotalPages: 1,
-	}, nil
-}
-
-func (s *stubProductRepo) Update(id uint, updates map[string]any) error {
-	product, ok := s.items[id]
-	if !ok {
-		return repository.ErrProductNotFound
-	}
-	if v, ok := updates["name"].(string); ok {
-		product.Name = v
-	}
-	if v, ok := updates["description"].(string); ok {
-		product.Description = v
-	}
-	if v, ok := updates["price"].(float64); ok {
-		product.Price = v
-	}
-	s.items[id] = product
-	return nil
-}
-
-func (s *stubProductRepo) DeleteByID(id uint) error {
-	if _, ok := s.items[id]; !ok {
-		return repository.ErrProductNotFound
-	}
-	delete(s.items, id)
-	return nil
-}
-
 func TestProductServiceValidation(t *testing.T) {
-	svc := NewProductService(&stubProductRepo{items: map[uint]domain.Product{}})
+	ctrl := gomock.NewController(t)
+	repo := repogomock.NewMockProductRepository(ctrl)
+	svc := NewProductService(repo)
 
 	_, err := svc.Create(context.Background(), CreateProductInput{Name: "ab", Price: 10})
 	if !errors.Is(err, ErrProductInvalidName) {
@@ -119,8 +48,71 @@ func TestProductServiceValidation(t *testing.T) {
 }
 
 func TestProductServiceCRUDFlow(t *testing.T) {
-	repo := &stubProductRepo{items: map[uint]domain.Product{}}
+	ctrl := gomock.NewController(t)
+	repo := repogomock.NewMockProductRepository(ctrl)
 	svc := NewProductService(repo)
+
+	items := map[uint]domain.Product{}
+	nextID := uint(1)
+
+	repo.EXPECT().Create(gomock.AssignableToTypeOf(&domain.Product{})).DoAndReturn(func(product *domain.Product) error {
+		product.ID = nextID
+		nextID++
+		items[product.ID] = *product
+		return nil
+	})
+	repo.EXPECT().FindByID(gomock.Any()).DoAndReturn(func(id uint) (*domain.Product, error) {
+		product, ok := items[id]
+		if !ok {
+			return nil, repository.ErrProductNotFound
+		}
+		cp := product
+		return &cp, nil
+	}).Times(3)
+	repo.EXPECT().Update(gomock.Any(), gomock.Any()).DoAndReturn(func(id uint, updates map[string]any) error {
+		product, ok := items[id]
+		if !ok {
+			return repository.ErrProductNotFound
+		}
+		if v, ok := updates["name"].(string); ok {
+			product.Name = v
+		}
+		if v, ok := updates["description"].(string); ok {
+			product.Description = v
+		}
+		if v, ok := updates["price"].(float64); ok {
+			product.Price = v
+		}
+		items[id] = product
+		return nil
+	})
+	repo.EXPECT().ListPaged(gomock.Any()).DoAndReturn(func(req repository.PageRequest) (repository.PageResult[domain.Product], error) {
+		normalized := repository.PageRequest{Page: req.Page, PageSize: req.PageSize}
+		if normalized.Page < 1 {
+			normalized.Page = repository.DefaultPage
+		}
+		if normalized.PageSize < 1 {
+			normalized.PageSize = repository.DefaultPageSize
+		}
+		out := make([]domain.Product, 0, len(items))
+		for _, p := range items {
+			out = append(out, p)
+		}
+		return repository.PageResult[domain.Product]{
+			Items:      out,
+			Page:       normalized.Page,
+			PageSize:   normalized.PageSize,
+			Total:      int64(len(out)),
+			TotalPages: 1,
+		}, nil
+	})
+	repo.EXPECT().DeleteByID(gomock.Any()).DoAndReturn(func(id uint) error {
+		if _, ok := items[id]; !ok {
+			return repository.ErrProductNotFound
+		}
+		delete(items, id)
+		return nil
+	})
 
 	created, err := svc.Create(context.Background(), CreateProductInput{Name: "Sample Product", Description: "desc", Price: 12.5})
 	if err != nil {

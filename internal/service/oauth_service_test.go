@@ -7,35 +7,17 @@ import (
 	"strings"
 	"testing"
 
+	"go.uber.org/mock/gomock"
 	"golang.org/x/oauth2"
 )
 
-type testOAuthProvider struct {
-	exchangeFn func(ctx context.Context, code string) (*oauth2.Token, error)
-	userinfoFn func(ctx context.Context, token *oauth2.Token) (*OAuthUserInfo, error)
-}
-
-func (p testOAuthProvider) AuthCodeURL(_ string) string { return "" }
-
-func (p testOAuthProvider) Exchange(ctx context.Context, code string) (*oauth2.Token, error) {
-	if p.exchangeFn != nil {
-		return p.exchangeFn(ctx, code)
-	}
-	return &oauth2.Token{AccessToken: "token"}, nil
-}
-
-func (p testOAuthProvider) FetchUserInfo(ctx context.Context, token *oauth2.Token) (*OAuthUserInfo, error) {
-	if p.userinfoFn != nil {
-		return p.userinfoFn(ctx, token)
-	}
-	return &OAuthUserInfo{ProviderUserID: "provider-id", Email: "user@example.com", EmailVerified: true}, nil
-}
-
 func TestOAuthServiceHandleGoogleCallbackExchangeError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	provider := NewMockOAuthProvider(ctrl)
+	provider.EXPECT().Exchange(gomock.Any(), "code").Return(nil, context.DeadlineExceeded)
+
 	svc := NewOAuthService(
-		testOAuthProvider{exchangeFn: func(context.Context, string) (*oauth2.Token, error) {
-			return nil, context.DeadlineExceeded
-		}},
+		provider,
 		nil,
 		nil,
 		nil,
@@ -49,10 +31,13 @@ func TestOAuthServiceHandleGoogleCallbackExchangeError(t *testing.T) {
 
 func TestOAuthServiceHandleGoogleCallbackUserInfoError(t *testing.T) {
 	userinfoErr := errors.New("userinfo status: 500")
+	ctrl := gomock.NewController(t)
+	provider := NewMockOAuthProvider(ctrl)
+	provider.EXPECT().Exchange(gomock.Any(), "code").Return(&oauth2.Token{AccessToken: "token"}, nil)
+	provider.EXPECT().FetchUserInfo(gomock.Any(), gomock.Any()).Return(nil, userinfoErr)
+
 	svc := NewOAuthService(
-		testOAuthProvider{userinfoFn: func(context.Context, *oauth2.Token) (*OAuthUserInfo, error) {
-			return nil, userinfoErr
-		}},
+		provider,
 		nil,
 		nil,
 		nil,
@@ -65,10 +50,13 @@ func TestOAuthServiceHandleGoogleCallbackUserInfoError(t *testing.T) {
 }
 
 func TestOAuthServiceHandleGoogleCallbackEmailNotVerified(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	provider := NewMockOAuthProvider(ctrl)
+	provider.EXPECT().Exchange(gomock.Any(), "code").Return(&oauth2.Token{AccessToken: "token"}, nil)
+	provider.EXPECT().FetchUserInfo(gomock.Any(), gomock.Any()).Return(&OAuthUserInfo{ProviderUserID: "provider-id", Email: "user@example.com", EmailVerified: false}, nil)
+
 	svc := NewOAuthService(
-		testOAuthProvider{userinfoFn: func(context.Context, *oauth2.Token) (*OAuthUserInfo, error) {
-			return &OAuthUserInfo{ProviderUserID: "provider-id", Email: "user@example.com", EmailVerified: false}, nil
-		}},
+		provider,
 		nil,
 		nil,
 		nil,
@@ -81,12 +69,13 @@ func TestOAuthServiceHandleGoogleCallbackEmailNotVerified(t *testing.T) {
 }
 
 func TestOAuthServiceHandleGoogleCallbackNilUserInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	provider := NewMockOAuthProvider(ctrl)
+	provider.EXPECT().Exchange(gomock.Any(), "code").Return(&oauth2.Token{AccessToken: "token"}, nil)
+	provider.EXPECT().FetchUserInfo(gomock.Any(), gomock.Any()).Return(nil, nil)
+
 	svc := NewOAuthService(
-		testOAuthProvider{
-			userinfoFn: func(context.Context, *oauth2.Token) (*OAuthUserInfo, error) {
-				return nil, nil
-			},
-		},
+		provider,
 		nil,
 		nil,
 		nil,

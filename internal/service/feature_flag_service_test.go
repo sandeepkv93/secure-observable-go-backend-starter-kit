@@ -7,149 +7,24 @@ import (
 
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/domain"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/repository"
+	repogomock "github.com/sandeepkv93/everything-backend-starter-kit/internal/repository/gomock"
+	"go.uber.org/mock/gomock"
 )
 
-type stubFeatureFlagRepo struct {
-	flags map[uint]domain.FeatureFlag
-}
-
-func (s *stubFeatureFlagRepo) ListFlags() ([]domain.FeatureFlag, error) {
-	out := make([]domain.FeatureFlag, 0, len(s.flags))
-	for _, f := range s.flags {
-		out = append(out, f)
-	}
-	return out, nil
-}
-
-func (s *stubFeatureFlagRepo) FindFlagByID(id uint) (*domain.FeatureFlag, error) {
-	f, ok := s.flags[id]
-	if !ok {
-		return nil, repository.ErrFeatureFlagNotFound
-	}
-	cp := f
-	return &cp, nil
-}
-
-func (s *stubFeatureFlagRepo) FindFlagByKey(key string) (*domain.FeatureFlag, error) {
-	for _, f := range s.flags {
-		if f.Key == key {
-			cp := f
-			return &cp, nil
-		}
-	}
-	return nil, repository.ErrFeatureFlagNotFound
-}
-
-func (s *stubFeatureFlagRepo) CreateFlag(flag *domain.FeatureFlag) error {
-	if s.flags == nil {
-		s.flags = map[uint]domain.FeatureFlag{}
-	}
-	if flag.ID == 0 {
-		flag.ID = nextFeatureFlagID(s.flags)
-	}
-	s.flags[flag.ID] = *flag
-	return nil
-}
-
-func (s *stubFeatureFlagRepo) UpdateFlag(flag *domain.FeatureFlag) error {
-	if _, ok := s.flags[flag.ID]; !ok {
-		return repository.ErrFeatureFlagNotFound
-	}
-	s.flags[flag.ID] = *flag
-	return nil
-}
-
-func (s *stubFeatureFlagRepo) DeleteFlag(id uint) error {
-	if _, ok := s.flags[id]; !ok {
-		return repository.ErrFeatureFlagNotFound
-	}
-	delete(s.flags, id)
-	return nil
-}
-
-func (s *stubFeatureFlagRepo) ListRules(flagID uint) ([]domain.FeatureFlagRule, error) {
-	f, ok := s.flags[flagID]
-	if !ok {
-		return nil, repository.ErrFeatureFlagNotFound
-	}
-	return append([]domain.FeatureFlagRule(nil), f.Rules...), nil
-}
-
-func (s *stubFeatureFlagRepo) CreateRule(rule *domain.FeatureFlagRule) error {
-	f, ok := s.flags[rule.FeatureFlagID]
-	if !ok {
-		return repository.ErrFeatureFlagNotFound
-	}
-	rule.ID = nextFeatureFlagRuleID(f.Rules)
-	f.Rules = append(f.Rules, *rule)
-	s.flags[rule.FeatureFlagID] = f
-	return nil
-}
-
-func (s *stubFeatureFlagRepo) UpdateRule(rule *domain.FeatureFlagRule) error {
-	f, ok := s.flags[rule.FeatureFlagID]
-	if !ok {
-		return repository.ErrFeatureFlagNotFound
-	}
-	for i := range f.Rules {
-		if f.Rules[i].ID == rule.ID {
-			f.Rules[i] = *rule
-			s.flags[rule.FeatureFlagID] = f
-			return nil
-		}
-	}
-	return repository.ErrFeatureFlagRuleNotFound
-}
-
-func (s *stubFeatureFlagRepo) DeleteRule(flagID, ruleID uint) error {
-	f, ok := s.flags[flagID]
-	if !ok {
-		return repository.ErrFeatureFlagNotFound
-	}
-	for i := range f.Rules {
-		if f.Rules[i].ID == ruleID {
-			f.Rules = append(f.Rules[:i], f.Rules[i+1:]...)
-			s.flags[flagID] = f
-			return nil
-		}
-	}
-	return repository.ErrFeatureFlagRuleNotFound
-}
-
-func nextFeatureFlagID(flags map[uint]domain.FeatureFlag) uint {
-	var maxID uint
-	for id := range flags {
-		if id > maxID {
-			maxID = id
-		}
-	}
-	return maxID + 1
-}
-
-func nextFeatureFlagRuleID(rules []domain.FeatureFlagRule) uint {
-	var maxID uint
-	for _, rule := range rules {
-		if rule.ID > maxID {
-			maxID = rule.ID
-		}
-	}
-	return maxID + 1
-}
-
 func TestFeatureFlagServiceEvaluatePrecedence(t *testing.T) {
-	repo := &stubFeatureFlagRepo{flags: map[uint]domain.FeatureFlag{
-		1: {
-			ID:      1,
-			Key:     "new_checkout",
-			Enabled: false,
-			Rules: []domain.FeatureFlagRule{
-				{ID: 1, FeatureFlagID: 1, Type: FeatureFlagRuleTypePercent, Percentage: 100, Enabled: false, Priority: 50},
-				{ID: 2, FeatureFlagID: 1, Type: FeatureFlagRuleTypeEnvironment, MatchValue: "prod", Enabled: false, Priority: 40},
-				{ID: 3, FeatureFlagID: 1, Type: FeatureFlagRuleTypeRole, MatchValue: "admin", Enabled: true, Priority: 30},
-				{ID: 4, FeatureFlagID: 1, Type: FeatureFlagRuleTypeUser, MatchValue: "42", Enabled: false, Priority: 20},
-			},
+	ctrl := gomock.NewController(t)
+	repo := repogomock.NewMockFeatureFlagRepository(ctrl)
+	repo.EXPECT().FindFlagByKey("new_checkout").AnyTimes().Return(&domain.FeatureFlag{
+		ID:      1,
+		Key:     "new_checkout",
+		Enabled: false,
+		Rules: []domain.FeatureFlagRule{
+			{ID: 1, FeatureFlagID: 1, Type: FeatureFlagRuleTypePercent, Percentage: 100, Enabled: false, Priority: 50},
+			{ID: 2, FeatureFlagID: 1, Type: FeatureFlagRuleTypeEnvironment, MatchValue: "prod", Enabled: false, Priority: 40},
+			{ID: 3, FeatureFlagID: 1, Type: FeatureFlagRuleTypeRole, MatchValue: "admin", Enabled: true, Priority: 30},
+			{ID: 4, FeatureFlagID: 1, Type: FeatureFlagRuleTypeUser, MatchValue: "42", Enabled: false, Priority: 20},
 		},
-	}}
+	}, nil)
 	svc := NewFeatureFlagService(repo, NewInMemoryFeatureFlagEvaluationCacheStore())
 
 	res, err := svc.EvaluateByKey(context.Background(), "new_checkout", FeatureFlagEvaluationContext{
@@ -190,7 +65,9 @@ func TestFeatureFlagServiceEvaluatePrecedence(t *testing.T) {
 }
 
 func TestFeatureFlagServiceRuleValidation(t *testing.T) {
-	repo := &stubFeatureFlagRepo{flags: map[uint]domain.FeatureFlag{1: {ID: 1, Key: "k"}}}
+	ctrl := gomock.NewController(t)
+	repo := repogomock.NewMockFeatureFlagRepository(ctrl)
+	repo.EXPECT().FindFlagByID(uint(1)).AnyTimes().Return(&domain.FeatureFlag{ID: 1, Key: "k"}, nil)
 	svc := NewFeatureFlagService(repo, NewNoopFeatureFlagEvaluationCacheStore())
 
 	err := svc.CreateRule(context.Background(), &domain.FeatureFlagRule{FeatureFlagID: 1, Type: "percent", Percentage: 120})
@@ -216,5 +93,67 @@ func TestStablePercentBucketDistribution(t *testing.T) {
 	}
 	if enabled < 4700 || enabled > 5300 {
 		t.Fatalf("expected ~50%% rollout distribution, got enabled=%d/%d", enabled, sampleSize)
+	}
+}
+
+func TestFeatureFlagServiceCRUDWithGeneratedMocks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repogomock.NewMockFeatureFlagRepository(ctrl)
+	svc := NewFeatureFlagService(repo, NewNoopFeatureFlagEvaluationCacheStore())
+
+	flags := map[uint]domain.FeatureFlag{}
+	nextID := uint(1)
+
+	repo.EXPECT().CreateFlag(gomock.AssignableToTypeOf(&domain.FeatureFlag{})).DoAndReturn(func(flag *domain.FeatureFlag) error {
+		if flag.ID == 0 {
+			flag.ID = nextID
+			nextID++
+		}
+		flags[flag.ID] = *flag
+		return nil
+	})
+	repo.EXPECT().FindFlagByID(gomock.Any()).DoAndReturn(func(id uint) (*domain.FeatureFlag, error) {
+		f, ok := flags[id]
+		if !ok {
+			return nil, repository.ErrFeatureFlagNotFound
+		}
+		cp := f
+		return &cp, nil
+	}).AnyTimes()
+	repo.EXPECT().UpdateFlag(gomock.AssignableToTypeOf(&domain.FeatureFlag{})).DoAndReturn(func(flag *domain.FeatureFlag) error {
+		if _, ok := flags[flag.ID]; !ok {
+			return repository.ErrFeatureFlagNotFound
+		}
+		flags[flag.ID] = *flag
+		return nil
+	})
+	repo.EXPECT().DeleteFlag(gomock.Any()).DoAndReturn(func(id uint) error {
+		if _, ok := flags[id]; !ok {
+			return repository.ErrFeatureFlagNotFound
+		}
+		delete(flags, id)
+		return nil
+	})
+
+	flag := &domain.FeatureFlag{Key: "k1", Description: "flag one", Enabled: true}
+	if err := svc.CreateFlag(context.Background(), flag); err != nil {
+		t.Fatalf("CreateFlag: %v", err)
+	}
+
+	loaded, err := svc.GetFlagByID(context.Background(), flag.ID)
+	if err != nil {
+		t.Fatalf("GetFlagByID: %v", err)
+	}
+	if loaded.Key != "k1" {
+		t.Fatalf("unexpected loaded flag: %+v", loaded)
+	}
+
+	loaded.Description = "flag one updated"
+	if err := svc.UpdateFlag(context.Background(), loaded); err != nil {
+		t.Fatalf("UpdateFlag: %v", err)
+	}
+
+	if err := svc.DeleteFlag(context.Background(), loaded.ID); err != nil {
+		t.Fatalf("DeleteFlag: %v", err)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -13,80 +12,13 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/sandeepkv93/everything-backend-starter-kit/internal/domain"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/http/middleware"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/repository"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/service"
+	servicegomock "github.com/sandeepkv93/everything-backend-starter-kit/internal/service/gomock"
+	"go.uber.org/mock/gomock"
 )
-
-type stubUserSvc struct {
-	getByIDFn func(id uint) (*domain.User, []string, error)
-}
-
-func (s *stubUserSvc) GetByID(id uint) (*domain.User, []string, error) {
-	if s.getByIDFn != nil {
-		return s.getByIDFn(id)
-	}
-	return nil, nil, errors.New("not implemented")
-}
-
-func (s *stubUserSvc) List() ([]domain.User, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (s *stubUserSvc) SetRoles(userID uint, roleIDs []uint) error {
-	return errors.New("not implemented")
-}
-
-type stubSessionSvc struct {
-	resolveFn func(r *http.Request, claims *security.Claims, userID uint) (uint, error)
-	listFn    func(userID uint, currentSessionID uint) ([]service.SessionView, error)
-	revokeFn  func(userID, sessionID uint) (string, error)
-	revokeAll func(userID, currentSessionID uint) (int64, error)
-}
-
-func (s *stubSessionSvc) ListActiveSessions(userID uint, currentSessionID uint) ([]service.SessionView, error) {
-	if s.listFn != nil {
-		return s.listFn(userID, currentSessionID)
-	}
-	return nil, nil
-}
-
-func (s *stubSessionSvc) ResolveCurrentSessionID(r *http.Request, claims *security.Claims, userID uint) (uint, error) {
-	if s.resolveFn != nil {
-		return s.resolveFn(r, claims, userID)
-	}
-	return 0, nil
-}
-
-func (s *stubSessionSvc) RevokeSession(userID, sessionID uint) (string, error) {
-	if s.revokeFn != nil {
-		return s.revokeFn(userID, sessionID)
-	}
-	return "revoked", nil
-}
-
-func (s *stubSessionSvc) RevokeOtherSessions(userID, currentSessionID uint) (int64, error) {
-	if s.revokeAll != nil {
-		return s.revokeAll(userID, currentSessionID)
-	}
-	return 0, nil
-}
-
-type stubStorageSvc struct{}
-
-func (s *stubStorageSvc) UploadAvatar(_ context.Context, _ uint, _ io.Reader, _ int64, _ string) (string, error) {
-	return "", errors.New("not implemented")
-}
-
-func (s *stubStorageSvc) DeleteAvatar(_ context.Context, _ uint, _ string) error {
-	return errors.New("not implemented")
-}
-
-func (s *stubStorageSvc) GenerateAvatarURL(_ context.Context, _ string) (string, error) {
-	return "", errors.New("not implemented")
-}
 
 func userReqWithClaims(r *http.Request, sub string) *http.Request {
 	claims := &security.Claims{}
@@ -103,7 +35,11 @@ func withURLParam(r *http.Request, key, val string) *http.Request {
 }
 
 func TestUserHandlerMeErrorMapping(t *testing.T) {
-	h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{}, &stubStorageSvc{})
+	ctrl := gomock.NewController(t)
+	userSvc := servicegomock.NewMockUserServiceInterface(ctrl)
+	sessionSvc := servicegomock.NewMockSessionServiceInterface(ctrl)
+	storageSvc := servicegomock.NewMockStorageService(ctrl)
+	h := NewUserHandler(userSvc, sessionSvc, storageSvc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	rr := httptest.NewRecorder()
@@ -112,9 +48,8 @@ func TestUserHandlerMeErrorMapping(t *testing.T) {
 		t.Fatalf("expected 401, got %d", rr.Code)
 	}
 
-	h = NewUserHandler(&stubUserSvc{getByIDFn: func(id uint) (*domain.User, []string, error) {
-		return nil, nil, errors.New("db down")
-	}}, &stubSessionSvc{}, &stubStorageSvc{})
+	userSvc.EXPECT().GetByID(uint(7)).Return(nil, nil, errors.New("db down"))
+	h = NewUserHandler(userSvc, sessionSvc, storageSvc)
 	req = userReqWithClaims(httptest.NewRequest(http.MethodGet, "/api/v1/me", nil), "7")
 	rr = httptest.NewRecorder()
 	h.Me(rr, req)
@@ -126,18 +61,19 @@ func TestUserHandlerMeErrorMapping(t *testing.T) {
 func TestUserHandlerSessionsResolveFallbackAndErrors(t *testing.T) {
 	t.Run("resolve ErrSessionNotFound falls back to list with current_session_id=0", func(t *testing.T) {
 		called := false
-		h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{
-			resolveFn: func(r *http.Request, claims *security.Claims, userID uint) (uint, error) {
-				return 0, repository.ErrSessionNotFound
-			},
-			listFn: func(userID uint, currentSessionID uint) ([]service.SessionView, error) {
-				called = true
-				if currentSessionID != 0 {
-					t.Fatalf("expected currentSessionID=0 on fallback, got %d", currentSessionID)
-				}
-				return []service.SessionView{{ID: 1}}, nil
-			},
-		}, &stubStorageSvc{})
+		ctrl := gomock.NewController(t)
+		userSvc := servicegomock.NewMockUserServiceInterface(ctrl)
+		sessionSvc := servicegomock.NewMockSessionServiceInterface(ctrl)
+		storageSvc := servicegomock.NewMockStorageService(ctrl)
+		sessionSvc.EXPECT().ResolveCurrentSessionID(gomock.Any(), gomock.Any(), uint(9)).Return(uint(0), repository.ErrSessionNotFound)
+		sessionSvc.EXPECT().ListActiveSessions(uint(9), uint(0)).DoAndReturn(func(userID uint, currentSessionID uint) ([]service.SessionView, error) {
+			called = true
+			if currentSessionID != 0 {
+				t.Fatalf("expected currentSessionID=0 on fallback, got %d", currentSessionID)
+			}
+			return []service.SessionView{{ID: 1}}, nil
+		})
+		h := NewUserHandler(userSvc, sessionSvc, storageSvc)
 		req := userReqWithClaims(httptest.NewRequest(http.MethodGet, "/api/v1/sessions", nil), "9")
 		rr := httptest.NewRecorder()
 
@@ -151,11 +87,12 @@ func TestUserHandlerSessionsResolveFallbackAndErrors(t *testing.T) {
 	})
 
 	t.Run("resolve generic error returns 500", func(t *testing.T) {
-		h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{
-			resolveFn: func(r *http.Request, claims *security.Claims, userID uint) (uint, error) {
-				return 0, errors.New("backend failed")
-			},
-		}, &stubStorageSvc{})
+		ctrl := gomock.NewController(t)
+		userSvc := servicegomock.NewMockUserServiceInterface(ctrl)
+		sessionSvc := servicegomock.NewMockSessionServiceInterface(ctrl)
+		storageSvc := servicegomock.NewMockStorageService(ctrl)
+		sessionSvc.EXPECT().ResolveCurrentSessionID(gomock.Any(), gomock.Any(), uint(9)).Return(uint(0), errors.New("backend failed"))
+		h := NewUserHandler(userSvc, sessionSvc, storageSvc)
 		req := userReqWithClaims(httptest.NewRequest(http.MethodGet, "/api/v1/sessions", nil), "9")
 		rr := httptest.NewRecorder()
 
@@ -170,7 +107,12 @@ func TestUserHandlerRevokeSessionMatrix(t *testing.T) {
 	baseReq := userReqWithClaims(httptest.NewRequest(http.MethodDelete, "/api/v1/sessions/1", nil), "11")
 
 	t.Run("invalid session id", func(t *testing.T) {
-		h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{}, &stubStorageSvc{})
+		ctrl := gomock.NewController(t)
+		userSvc := servicegomock.NewMockUserServiceInterface(ctrl)
+		sessionSvc := servicegomock.NewMockSessionServiceInterface(ctrl)
+		storageSvc := servicegomock.NewMockStorageService(ctrl)
+		sessionSvc.EXPECT().RevokeSession(gomock.Any(), gomock.Any()).Times(0)
+		h := NewUserHandler(userSvc, sessionSvc, storageSvc)
 		req := withURLParam(baseReq.Clone(baseReq.Context()), "session_id", "not-a-number")
 		rr := httptest.NewRecorder()
 		h.RevokeSession(rr, req)
@@ -180,9 +122,12 @@ func TestUserHandlerRevokeSessionMatrix(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{revokeFn: func(userID, sessionID uint) (string, error) {
-			return "", repository.ErrSessionNotFound
-		}}, &stubStorageSvc{})
+		ctrl := gomock.NewController(t)
+		userSvc := servicegomock.NewMockUserServiceInterface(ctrl)
+		sessionSvc := servicegomock.NewMockSessionServiceInterface(ctrl)
+		storageSvc := servicegomock.NewMockStorageService(ctrl)
+		sessionSvc.EXPECT().RevokeSession(uint(11), uint(123)).Return("", repository.ErrSessionNotFound)
+		h := NewUserHandler(userSvc, sessionSvc, storageSvc)
 		req := withURLParam(baseReq.Clone(baseReq.Context()), "session_id", "123")
 		rr := httptest.NewRecorder()
 		h.RevokeSession(rr, req)
@@ -192,9 +137,12 @@ func TestUserHandlerRevokeSessionMatrix(t *testing.T) {
 	})
 
 	t.Run("already revoked", func(t *testing.T) {
-		h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{revokeFn: func(userID, sessionID uint) (string, error) {
-			return "already_revoked", nil
-		}}, &stubStorageSvc{})
+		ctrl := gomock.NewController(t)
+		userSvc := servicegomock.NewMockUserServiceInterface(ctrl)
+		sessionSvc := servicegomock.NewMockSessionServiceInterface(ctrl)
+		storageSvc := servicegomock.NewMockStorageService(ctrl)
+		sessionSvc.EXPECT().RevokeSession(uint(11), uint(123)).Return("already_revoked", nil)
+		h := NewUserHandler(userSvc, sessionSvc, storageSvc)
 		req := withURLParam(baseReq.Clone(baseReq.Context()), "session_id", "123")
 		rr := httptest.NewRecorder()
 		h.RevokeSession(rr, req)
@@ -207,12 +155,12 @@ func TestUserHandlerRevokeSessionMatrix(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{revokeFn: func(userID, sessionID uint) (string, error) {
-			if userID != 11 || sessionID != 123 {
-				t.Fatalf("unexpected args userID=%d sessionID=%d", userID, sessionID)
-			}
-			return "revoked", nil
-		}}, &stubStorageSvc{})
+		ctrl := gomock.NewController(t)
+		userSvc := servicegomock.NewMockUserServiceInterface(ctrl)
+		sessionSvc := servicegomock.NewMockSessionServiceInterface(ctrl)
+		storageSvc := servicegomock.NewMockStorageService(ctrl)
+		sessionSvc.EXPECT().RevokeSession(uint(11), uint(123)).Return("revoked", nil)
+		h := NewUserHandler(userSvc, sessionSvc, storageSvc)
 		req := withURLParam(baseReq.Clone(baseReq.Context()), "session_id", strconv.Itoa(123))
 		rr := httptest.NewRecorder()
 		h.RevokeSession(rr, req)
@@ -224,7 +172,11 @@ func TestUserHandlerRevokeSessionMatrix(t *testing.T) {
 
 func TestUserHandlerRevokeOtherSessionsMatrix(t *testing.T) {
 	t.Run("unauthorized missing claims", func(t *testing.T) {
-		h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{}, &stubStorageSvc{})
+		ctrl := gomock.NewController(t)
+		userSvc := servicegomock.NewMockUserServiceInterface(ctrl)
+		sessionSvc := servicegomock.NewMockSessionServiceInterface(ctrl)
+		storageSvc := servicegomock.NewMockStorageService(ctrl)
+		h := NewUserHandler(userSvc, sessionSvc, storageSvc)
 		rr := httptest.NewRecorder()
 		h.RevokeOtherSessions(rr, httptest.NewRequest(http.MethodPost, "/api/v1/sessions/revoke-others", nil))
 		if rr.Code != http.StatusUnauthorized {
@@ -233,9 +185,12 @@ func TestUserHandlerRevokeOtherSessionsMatrix(t *testing.T) {
 	})
 
 	t.Run("resolve error", func(t *testing.T) {
-		h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{resolveFn: func(r *http.Request, claims *security.Claims, userID uint) (uint, error) {
-			return 0, errors.New("cannot resolve")
-		}}, &stubStorageSvc{})
+		ctrl := gomock.NewController(t)
+		userSvc := servicegomock.NewMockUserServiceInterface(ctrl)
+		sessionSvc := servicegomock.NewMockSessionServiceInterface(ctrl)
+		storageSvc := servicegomock.NewMockStorageService(ctrl)
+		sessionSvc.EXPECT().ResolveCurrentSessionID(gomock.Any(), gomock.Any(), uint(12)).Return(uint(0), errors.New("cannot resolve"))
+		h := NewUserHandler(userSvc, sessionSvc, storageSvc)
 		rr := httptest.NewRecorder()
 		h.RevokeOtherSessions(rr, userReqWithClaims(httptest.NewRequest(http.MethodPost, "/api/v1/sessions/revoke-others", nil), "12"))
 		if rr.Code != http.StatusUnauthorized {
@@ -244,12 +199,13 @@ func TestUserHandlerRevokeOtherSessionsMatrix(t *testing.T) {
 	})
 
 	t.Run("internal error", func(t *testing.T) {
-		h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{
-			resolveFn: func(r *http.Request, claims *security.Claims, userID uint) (uint, error) { return 999, nil },
-			revokeAll: func(userID, currentSessionID uint) (int64, error) {
-				return 0, errors.New("db error")
-			},
-		}, &stubStorageSvc{})
+		ctrl := gomock.NewController(t)
+		userSvc := servicegomock.NewMockUserServiceInterface(ctrl)
+		sessionSvc := servicegomock.NewMockSessionServiceInterface(ctrl)
+		storageSvc := servicegomock.NewMockStorageService(ctrl)
+		sessionSvc.EXPECT().ResolveCurrentSessionID(gomock.Any(), gomock.Any(), uint(12)).Return(uint(999), nil)
+		sessionSvc.EXPECT().RevokeOtherSessions(uint(12), uint(999)).Return(int64(0), errors.New("db error"))
+		h := NewUserHandler(userSvc, sessionSvc, storageSvc)
 		rr := httptest.NewRecorder()
 		h.RevokeOtherSessions(rr, userReqWithClaims(httptest.NewRequest(http.MethodPost, "/api/v1/sessions/revoke-others", nil), "12"))
 		if rr.Code != http.StatusInternalServerError {
@@ -258,15 +214,13 @@ func TestUserHandlerRevokeOtherSessionsMatrix(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		h := NewUserHandler(&stubUserSvc{}, &stubSessionSvc{
-			resolveFn: func(r *http.Request, claims *security.Claims, userID uint) (uint, error) { return 444, nil },
-			revokeAll: func(userID, currentSessionID uint) (int64, error) {
-				if userID != 12 || currentSessionID != 444 {
-					t.Fatalf("unexpected args userID=%d currentSessionID=%d", userID, currentSessionID)
-				}
-				return 3, nil
-			},
-		}, &stubStorageSvc{})
+		ctrl := gomock.NewController(t)
+		userSvc := servicegomock.NewMockUserServiceInterface(ctrl)
+		sessionSvc := servicegomock.NewMockSessionServiceInterface(ctrl)
+		storageSvc := servicegomock.NewMockStorageService(ctrl)
+		sessionSvc.EXPECT().ResolveCurrentSessionID(gomock.Any(), gomock.Any(), uint(12)).Return(uint(444), nil)
+		sessionSvc.EXPECT().RevokeOtherSessions(uint(12), uint(444)).Return(int64(3), nil)
+		h := NewUserHandler(userSvc, sessionSvc, storageSvc)
 		rr := httptest.NewRecorder()
 		h.RevokeOtherSessions(rr, userReqWithClaims(httptest.NewRequest(http.MethodPost, "/api/v1/sessions/revoke-others", nil), "12"))
 		if rr.Code != http.StatusOK {

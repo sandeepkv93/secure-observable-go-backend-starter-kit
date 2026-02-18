@@ -8,33 +8,15 @@ import (
 	"testing"
 
 	"github.com/sandeepkv93/everything-backend-starter-kit/internal/security"
+	servicegomock "github.com/sandeepkv93/everything-backend-starter-kit/internal/service/gomock"
+	"go.uber.org/mock/gomock"
 )
 
-type testRBACAuthorizer struct {
-	allow bool
-}
-
-func (a testRBACAuthorizer) HasPermission(_ []string, _ string) bool {
-	return a.allow
-}
-
-type testPermissionResolver struct {
-	perms []string
-	err   error
-}
-
-func (r testPermissionResolver) ResolvePermissions(_ context.Context, _ *security.Claims) ([]string, error) {
-	if r.err != nil {
-		return nil, r.err
-	}
-	return r.perms, nil
-}
-
-func (r testPermissionResolver) InvalidateUser(_ context.Context, _ uint) error { return nil }
-func (r testPermissionResolver) InvalidateAll(_ context.Context) error          { return nil }
-
 func TestRequirePermissionDenied(t *testing.T) {
-	mw := RequirePermission(testRBACAuthorizer{allow: false}, nil, "admin:read")
+	ctrl := gomock.NewController(t)
+	authorizer := servicegomock.NewMockRBACAuthorizer(ctrl)
+	authorizer.EXPECT().HasPermission([]string{"user:read"}, "admin:read").Return(false)
+	mw := RequirePermission(authorizer, nil, "admin:read")
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req = req.WithContext(context.WithValue(req.Context(), ClaimsContextKey, &security.Claims{Permissions: []string{"user:read"}}))
@@ -51,7 +33,12 @@ func TestRequirePermissionDenied(t *testing.T) {
 
 func TestRequirePermissionResolverError(t *testing.T) {
 	resolverErr := errors.New("resolver unavailable")
-	mw := RequirePermission(testRBACAuthorizer{allow: true}, testPermissionResolver{err: resolverErr}, "admin:read")
+	ctrl := gomock.NewController(t)
+	authorizer := servicegomock.NewMockRBACAuthorizer(ctrl)
+	resolver := servicegomock.NewMockPermissionResolver(ctrl)
+	resolver.EXPECT().ResolvePermissions(gomock.Any(), gomock.Any()).Return(nil, resolverErr)
+	authorizer.EXPECT().HasPermission(gomock.Any(), "admin:read").Times(0)
+	mw := RequirePermission(authorizer, resolver, "admin:read")
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req = req.WithContext(context.WithValue(req.Context(), ClaimsContextKey, &security.Claims{Permissions: []string{"admin:read"}}))
@@ -67,7 +54,12 @@ func TestRequirePermissionResolverError(t *testing.T) {
 }
 
 func TestRequirePermissionAllowed(t *testing.T) {
-	mw := RequirePermission(testRBACAuthorizer{allow: true}, testPermissionResolver{perms: []string{"admin:read"}}, "admin:read")
+	ctrl := gomock.NewController(t)
+	authorizer := servicegomock.NewMockRBACAuthorizer(ctrl)
+	resolver := servicegomock.NewMockPermissionResolver(ctrl)
+	resolver.EXPECT().ResolvePermissions(gomock.Any(), gomock.Any()).Return([]string{"admin:read"}, nil)
+	authorizer.EXPECT().HasPermission([]string{"admin:read"}, "admin:read").Return(true)
+	mw := RequirePermission(authorizer, resolver, "admin:read")
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req = req.WithContext(context.WithValue(req.Context(), ClaimsContextKey, &security.Claims{Permissions: []string{"admin:read"}}))
