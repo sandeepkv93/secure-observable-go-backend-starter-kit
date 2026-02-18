@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "gomock",
+    srcs = ["mock_rate_limit_middleware.go"],
+    importpath = "github.com/sandeepkv93/everything-backend-starter-kit/internal/http/middleware/gomock",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/http/middleware",
+        "@org_uber_go_mock//gomock",
+    ],
+)

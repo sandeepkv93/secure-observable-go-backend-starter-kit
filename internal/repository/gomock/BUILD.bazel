@@ -1,0 +1,23 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "gomock",
+    srcs = [
+        "mock_feature_flag_repository.go",
+        "mock_local_credential_repository.go",
+        "mock_oauth_repository.go",
+        "mock_permission_repository.go",
+        "mock_product_repository.go",
+        "mock_role_repository.go",
+        "mock_session_repository.go",
+        "mock_user_repository.go",
+        "mock_verification_token_repository.go",
+    ],
+    importpath = "github.com/sandeepkv93/everything-backend-starter-kit/internal/repository/gomock",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/domain",
+        "//internal/repository",
+        "@org_uber_go_mock//gomock",
+    ],
+)

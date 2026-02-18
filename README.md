@@ -149,7 +149,7 @@ Use the checked-in VS Code REST Client collections to exercise all APIs (includi
    - `05-admin-rbac.rest`
 3. Optionally use `api/everything-backend-starter-kit.rest` as a monolithic fallback
 4. Update variables at the top (`@baseUrl`, user credentials, IDs) for your local environment
-4. Run requests in sequence:
+5. Run requests in sequence:
    - health checks
    - local login/register
    - CSRF-protected endpoints (`/auth/refresh`, `/auth/logout`, `/auth/local/change-password`, `/me/*` mutating routes)
@@ -177,6 +177,24 @@ pre-commit run --all-files
 ```
 
 Hook coverage includes Go formatting/linting (`gofmt`, `goimports`, `golangci-lint`, `go mod tidy`), Dockerfile linting (`hadolint`), YAML linting (`yamllint`), and secret scanning (`detect-secrets`).
+
+### Mock Generation
+
+Deterministic gomock files are generated from exported interfaces in key packages.
+
+```bash
+task mockgen:install
+task mockgen
+task mockgen-check
+```
+
+Generated output directories:
+- `internal/repository/gomock`
+- `internal/service/gomock`
+- `internal/health/gomock`
+- `internal/http/middleware/gomock`
+
+CI enforces drift checks by re-running the generator.
 
 ### Feature flags
 

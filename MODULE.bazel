@@ -41,4 +41,5 @@ use_repo(
     "org_golang_x_crypto",
     "org_golang_x_oauth2",
     "org_golang_x_sync",
+    "org_uber_go_mock",
 )

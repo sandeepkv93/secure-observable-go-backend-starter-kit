@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "gomock",
+    srcs = ["mock_checker.go"],
+    importpath = "github.com/sandeepkv93/everything-backend-starter-kit/internal/health/gomock",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/health",
+        "@org_uber_go_mock//gomock",
+    ],
+)

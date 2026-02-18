@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "gomock",
+    srcs = [
+        "mock_admin_list_cache.go",
+        "mock_auth_abuse_guard.go",
+        "mock_email_verification_notifier.go",
+        "mock_feature_flag_cache_store.go",
+        "mock_idempotency_store.go",
+        "mock_interfaces.go",
+        "mock_negative_lookup_cache.go",
+        "mock_oauth_service.go",
+        "mock_rbac_permission_cache_store.go",
+        "mock_storage_service.go",
+    ],
+    importpath = "github.com/sandeepkv93/everything-backend-starter-kit/internal/service/gomock",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/domain",
+        "//internal/repository",
+        "//internal/security",
+        "//internal/service",
+        "@org_golang_x_oauth2//:oauth2",
+        "@org_uber_go_mock//gomock",
+    ],
+)

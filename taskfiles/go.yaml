@@ -1,6 +1,27 @@
 version: '3'
 
 tasks:
+  mockgen:install:
+    cmds:
+      - mkdir -p ./bin
+      - GOBIN=$(pwd)/bin GOTOOLCHAIN=go1.26.0 go install go.uber.org/mock/mockgen@v0.6.0
+
+  mockgen:
+    deps: [mockgen:install]
+    cmds:
+      - MOCKGEN_BIN=$(pwd)/bin/mockgen bash scripts/build/generate_mocks_auto.sh
+
+  mockgen-check:
+    deps: [mockgen]
+    cmds:
+      - git diff --exit-code -- internal/repository/gomock internal/service/gomock internal/health/gomock internal/http/middleware/gomock
+
+  dev:generate-mocks:
+    deps: [mockgen]
+
+  dev:generate-mocks-check:
+    deps: [mockgen-check]
+
   lint:tools:
     cmds:
       - mkdir -p ./bin

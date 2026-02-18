@@ -21,6 +21,7 @@ GOBIN="$(pwd)/bin" GOTOOLCHAIN=go1.26.0 go install github.com/golangci/golangci-
 GOBIN="$(pwd)/bin" go install github.com/securego/gosec/v2/cmd/gosec@v2.22.9
 GOBIN="$(pwd)/bin" GOTOOLCHAIN=go1.26.0 go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 GOBIN="$(pwd)/bin" go install github.com/zricethezav/gitleaks/v8@v8.24.2
+GOBIN="$(pwd)/bin" GOTOOLCHAIN=go1.26.0 go install go.uber.org/mock/mockgen@v0.6.0
 
 echo "ci: lint"
 GOTOOLCHAIN=go1.26.0 ./bin/golangci-lint run --config .golangci.yml
@@ -41,6 +42,9 @@ echo "ci: wire check"
 go run -mod=mod github.com/google/wire/cmd/wire ./internal/di
 GOTOOLCHAIN=go1.26.0 go mod tidy
 git diff --exit-code internal/di/wire_gen.go go.mod go.sum
+
+echo "ci: mockgen check"
+MOCKGEN_BIN="$(pwd)/bin/mockgen" bash scripts/ci/run_mockgen_check.sh
 
 echo "ci: security checks"
 ./bin/gosec -quiet -exclude-generated -exclude-dir=bin -exclude-dir=.git -tests ./...
