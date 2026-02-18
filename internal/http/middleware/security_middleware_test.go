@@ -58,6 +58,9 @@ func TestCORSPreflight(t *testing.T) {
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 for preflight, got %d", rr.Code)
 	}
+	if got := rr.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, PUT, PATCH, OPTIONS" {
+		t.Fatalf("expected allow-methods to include PUT, got %q", got)
+	}
 }
 
 func TestCSRFMiddlewareRejectsMissingCookie(t *testing.T) {

@@ -136,3 +136,16 @@ func TestFeatureFlagHandlerEvaluateAndAdminRBAC(t *testing.T) {
 		}
 	})
 }
+
+func TestFeatureFlagHandlerGetFlagRejectsMalformedID(t *testing.T) {
+	svc := &stubFeatureFlagService{}
+	h := NewFeatureFlagHandler(svc)
+
+	req := withURLParam(httptest.NewRequest(http.MethodGet, "/api/v1/admin/feature-flags/12abc", nil), "id", "12abc")
+	rr := httptest.NewRecorder()
+	h.GetFlag(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}

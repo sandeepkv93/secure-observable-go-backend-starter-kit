@@ -148,4 +148,18 @@ func TestProductHandlerPaginationAndRBAC(t *testing.T) {
 			t.Fatalf("expected 201, got %d body=%s", rr.Code, rr.Body.String())
 		}
 	})
+
+	t.Run("delete rejects malformed product id", func(t *testing.T) {
+		svc.deleteFn = func(ctx context.Context, id uint) error {
+			t.Fatalf("delete service should not be called for malformed id: %d", id)
+			return nil
+		}
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/products/12abc", nil)
+		req.Header.Set("Authorization", "Bearer "+productAccessTokenForTest(t, []string{"products:delete"}))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+		}
+	})
 }

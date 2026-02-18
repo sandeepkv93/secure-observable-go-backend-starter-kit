@@ -174,8 +174,8 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 func (h *AdminHandler) SetUserRoles(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
-	var userID uint
-	if _, err := fmtSscanfUint(idParam, &userID); err != nil {
+	userID, err := parsePathID(idParam)
+	if err != nil {
 		response.Error(w, r, http.StatusBadRequest, "BAD_REQUEST", "invalid user id", nil)
 		return
 	}
@@ -1013,19 +1013,12 @@ func adminActorID(r *http.Request) string {
 }
 
 func parsePathID(input string) (uint, error) {
-	var out uint
-	_, err := fmtSscanfUint(input, &out)
-	return out, err
-}
-
-func fmtSscanfUint(input string, out *uint) (int, error) {
-	var n uint64
-	count, err := fmt.Sscanf(input, "%d", &n)
+	trimmed := strings.TrimSpace(input)
+	n, err := strconv.ParseUint(trimmed, 10, 64)
 	if err != nil {
-		return count, err
+		return 0, err
 	}
-	*out = uint(n)
-	return count, nil
+	return uint(n), nil
 }
 
 func isConflictError(err error) bool {

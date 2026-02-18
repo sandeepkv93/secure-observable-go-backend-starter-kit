@@ -47,7 +47,7 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 				}
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
 				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token")
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS")
 			}
 			if r.Method == http.MethodOptions {
 				observability.RecordMiddlewareValidationEvent(r.Context(), "cors", "preflight")

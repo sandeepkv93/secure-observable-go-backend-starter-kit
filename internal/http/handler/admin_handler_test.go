@@ -506,6 +506,24 @@ func TestAdminHandlerLockoutHelpersAndListParserFailures(t *testing.T) {
 	})
 }
 
+func TestParsePathIDStrict(t *testing.T) {
+	t.Run("accepts numeric id", func(t *testing.T) {
+		id, err := parsePathID("42")
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if id != 42 {
+			t.Fatalf("expected id 42, got %d", id)
+		}
+	})
+
+	t.Run("rejects trailing characters", func(t *testing.T) {
+		if _, err := parsePathID("12abc"); err == nil {
+			t.Fatal("expected error for trailing characters")
+		}
+	})
+}
+
 func FuzzParseAdminListPageRequestRobustness(f *testing.F) {
 	f.Add("", "")
 	f.Add("1", "20")
